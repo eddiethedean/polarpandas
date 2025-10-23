@@ -1,3 +1,4 @@
+# Project specific
 creds.py
 notebooks/
 src/polarpandas.egg-info/
@@ -8,6 +9,27 @@ build/
 .ipynb_checkpoints/ 
 __pycache__/
 tests/__pycache__/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -138,3 +160,55 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Ruff cache
+.ruff_cache/
+
+# Black cache
+.black/
+
+# Pytest cache and reports
+.pytest_cache/
+htmlcov/
+coverage.xml
+.coverage
+.coverage.*
+
+# Benchmark results
+benchmark_results/
+*.benchmark
+
+# Documentation builds
+docs/_build/
+docs/build/
+
+# Jupyter notebook outputs
+*.ipynb_checkpoints/
+
+# Data files (if any)
+data/
+*.csv
+*.parquet
+*.json
+*.xlsx
+*.xls
+
+# Model files
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Local development
+local/
+scratch/
+playground/
+
+# Package installation
+*.egg-info/
+.eggs/
