@@ -7,12 +7,12 @@ name = "polarpandas"
 version = "0.1.0"
 description = "A pandas-compatible API layer built on top of Polars for high-performance data manipulation"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
-    {name = "Odos Matthews", email = "odos@example.com"}
+    {name = "Odos Matthews", email = "odosmatthews@gmail.com"}
 ]
 maintainers = [
-    {name = "Odos Matthews", email = "odos@example.com"}
+    {name = "Odos Matthews", email = "odosmatthews@gmail.com"}
 ]
 keywords = ["pandas", "polars", "dataframe", "data-analysis", "performance"]
 classifiers = [
