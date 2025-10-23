@@ -2,7 +2,8 @@
 Index implementation wrapping Polars Series with pandas-like API.
 """
 
-from typing import Any, List, Optional, Union, Tuple
+from typing import Any, Iterator, List, Optional, Tuple, Union
+
 import polars as pl
 
 
@@ -50,10 +51,10 @@ class Index:
         try:
             attr = getattr(self._series, name)
             return attr
-        except AttributeError:
+        except AttributeError as e:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
+            ) from e
 
     def __repr__(self) -> str:
         """Return string representation of the Index."""
@@ -66,6 +67,14 @@ class Index:
     def __len__(self) -> int:
         """Return the length of the Index."""
         return len(self._series)
+
+    def __iter__(self) -> Iterator[Any]:
+        """Return an iterator over the Index values."""
+        return iter(self._series.to_list())
+
+    def tolist(self) -> List[Any]:
+        """Return the Index values as a list."""
+        return self._series.to_list()
 
     @property
     def shape(self) -> Tuple[int]:

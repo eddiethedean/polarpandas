@@ -3,9 +3,11 @@ Comprehensive example demonstrating all pandas-style module-level functions.
 
 This shows how polarpandas can be used exactly like pandas!
 """
-import polarpandas as ppd
-import tempfile
+
 import os
+import tempfile
+
+import polarpandas as ppd
 
 print("=" * 70)
 print("POLARPANDAS - Complete Pandas Compatibility Demo")
@@ -19,12 +21,14 @@ print("📊 1. CREATING DATAFRAMES")
 print("-" * 70)
 
 # Method 1: From dictionary (like pandas)
-df1 = ppd.DataFrame({
-    "name": ["Alice", "Bob", "Charlie", "David"],
-    "age": [25, 30, 35, 28],
-    "city": ["NYC", "LA", "NYC", "Chicago"],
-    "salary": [70000, 80000, 90000, 75000]
-})
+df1 = ppd.DataFrame(
+    {
+        "name": ["Alice", "Bob", "Charlie", "David"],
+        "age": [25, 30, 35, 28],
+        "city": ["NYC", "LA", "NYC", "Chicago"],
+        "salary": [70000, 80000, 90000, 75000],
+    }
+)
 print("Created DataFrame from dictionary:")
 print(df1)
 print()
@@ -36,13 +40,13 @@ print("📖 2. IO OPERATIONS - WRITE & READ")
 print("-" * 70)
 
 # Write to CSV
-csv_file = tempfile.NamedTemporaryFile(delete=False, suffix='.csv').name
+csv_file = tempfile.NamedTemporaryFile(delete=False, suffix=".csv").name
 df1.to_csv(csv_file)
 print(f"✅ Written to CSV: {csv_file}")
 
 # Read from CSV using module-level function (EXACTLY like pd.read_csv!)
 df_from_csv = ppd.read_csv(csv_file)
-print(f"✅ Read back from CSV using ppd.read_csv():")
+print("✅ Read back from CSV using ppd.read_csv():")
 print(df_from_csv)
 print()
 
@@ -55,12 +59,14 @@ os.unlink(csv_file)
 print("🔗 3. CONCATENATING DATAFRAMES")
 print("-" * 70)
 
-df2 = ppd.DataFrame({
-    "name": ["Eve", "Frank"],
-    "age": [32, 27],
-    "city": ["LA", "NYC"],
-    "salary": [85000, 72000]
-})
+df2 = ppd.DataFrame(
+    {
+        "name": ["Eve", "Frank"],
+        "age": [32, 27],
+        "city": ["LA", "NYC"],
+        "salary": [85000, 72000],
+    }
+)
 
 # Use ppd.concat() just like pd.concat()!
 combined = ppd.concat([df1, df2])
@@ -75,15 +81,16 @@ print()
 print("🔀 4. MERGING DATAFRAMES")
 print("-" * 70)
 
-df_employees = ppd.DataFrame({
-    "name": ["Alice", "Bob", "Charlie"],
-    "employee_id": [101, 102, 103]
-})
+df_employees = ppd.DataFrame(
+    {"name": ["Alice", "Bob", "Charlie"], "employee_id": [101, 102, 103]}
+)
 
-df_departments = ppd.DataFrame({
-    "employee_id": [101, 102, 103],
-    "department": ["Engineering", "Sales", "Engineering"]
-})
+df_departments = ppd.DataFrame(
+    {
+        "employee_id": [101, 102, 103],
+        "department": ["Engineering", "Sales", "Engineering"],
+    }
+)
 
 # Use ppd.merge() just like pd.merge()!
 merged = ppd.merge(df_employees, df_departments, on="employee_id")
@@ -179,11 +186,13 @@ print()
 print("📊 10. PIVOT TABLES")
 print("-" * 70)
 
-sales_data = ppd.DataFrame({
-    "date": ["2021-01", "2021-01", "2021-02", "2021-02"],
-    "product": ["A", "B", "A", "B"],
-    "sales": [100, 150, 120, 180]
-})
+sales_data = ppd.DataFrame(
+    {
+        "date": ["2021-01", "2021-01", "2021-02", "2021-02"],
+        "product": ["A", "B", "A", "B"],
+        "sales": [100, 150, 120, 180],
+    }
+)
 
 print("Sales data:")
 print(sales_data)
@@ -213,4 +222,3 @@ print()
 print(f"📦 Package version: {ppd.__version__}")
 print(f"📊 Total functions available: {len(ppd.__all__)}")
 print()
-

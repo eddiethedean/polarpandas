@@ -1,16 +1,19 @@
 """
 Example usage of PolarPandas - a pandas-like API on top of Polars.
 """
+
 from polarpandas import DataFrame, Series
 
 # Create a DataFrame
 print("Creating a DataFrame:")
-df = DataFrame({
-    "name": ["Alice", "Bob", "Charlie", "David", "Eve"],
-    "age": [25, 30, 35, 28, 32],
-    "city": ["NYC", "LA", "Chicago", "NYC", "LA"],
-    "salary": [70000, 80000, 90000, 75000, 85000]
-})
+df = DataFrame(
+    {
+        "name": ["Alice", "Bob", "Charlie", "David", "Eve"],
+        "age": [25, 30, 35, 28, 32],
+        "city": ["NYC", "LA", "Chicago", "NYC", "LA"],
+        "salary": [70000, 80000, 90000, 75000, 85000],
+    }
+)
 print(df)
 print()
 
@@ -49,10 +52,7 @@ print(df.head(3))
 print()
 
 # Missing data handling
-df2 = DataFrame({
-    "a": [1, None, 3, 4],
-    "b": [5, 6, None, 8]
-})
+df2 = DataFrame({"a": [1, None, 3, 4], "b": [5, 6, None, 8]})
 print("DataFrame with missing values:")
 print(df2)
 print("\nFilling missing values with 0:")
@@ -78,4 +78,3 @@ print()
 
 print("✅ All operations completed successfully!")
 print(f"Final DataFrame has {len(df)} rows and {len(df.columns)} columns")
-

@@ -2,19 +2,22 @@
 Detailed performance analysis to determine when pandas vs polars is faster.
 This helps decide if a hybrid approach would be beneficial.
 """
-import time
+
 import sys
+import time
 
 try:
     import pandas as pd
+
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
     print("Install pandas: pip install pandas")
     sys.exit(1)
 
-import polarpandas as ppd
 import random
+
+import polarpandas as ppd
 
 
 def benchmark_operation(name, size, pandas_fn, polarpandas_fn, iterations=5):
@@ -26,7 +29,7 @@ def benchmark_operation(name, size, pandas_fn, polarpandas_fn, iterations=5):
         pandas_fn()
         pd_times.append(time.perf_counter() - start)
     pandas_time = min(pd_times)
-    
+
     # PolarPandas
     ppd_times = []
     for _ in range(iterations):
@@ -34,17 +37,17 @@ def benchmark_operation(name, size, pandas_fn, polarpandas_fn, iterations=5):
         polarpandas_fn()
         ppd_times.append(time.perf_counter() - start)
     polarpandas_time = min(ppd_times)
-    
+
     speedup = pandas_time / polarpandas_time
     winner = "polarpandas" if speedup > 1 else "pandas"
-    
+
     return {
-        'operation': name,
-        'size': size,
-        'pandas_ms': pandas_time * 1000,
-        'polarpandas_ms': polarpandas_time * 1000,
-        'speedup': speedup,
-        'winner': winner
+        "operation": name,
+        "size": size,
+        "pandas_ms": pandas_time * 1000,
+        "polarpandas_ms": polarpandas_time * 1000,
+        "speedup": speedup,
+        "winner": winner,
     }
 
 
@@ -59,42 +62,43 @@ results = []
 sizes = [100, 1_000, 10_000, 100_000]
 
 for size in sizes:
-    print(f"\n{'='*90}")
+    print(f"\n{'=' * 90}")
     print(f"DATASET SIZE: {size:,} rows")
-    print(f"{'='*90}\n")
-    
+    print(f"{'=' * 90}\n")
+
     # ===========================================================================
     # Simple column selection
     # ===========================================================================
-    data = {"a": list(range(size)), "b": list(range(size, 2*size))}
+    data = {"a": list(range(size)), "b": list(range(size, 2 * size))}
     pd_df = pd.DataFrame(data)
     ppd_df = ppd.DataFrame(data)
-    
+
     result = benchmark_operation(
-        "Column Selection",
-        size,
-        lambda: pd_df['a'],
-        lambda: ppd_df['a']
+        "Column Selection", size, lambda: pd_df["a"], lambda: ppd_df["a"]
     )
     results.append(result)
-    print(f"  Column Selection:          {result['winner']:12} wins  "
-          f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
-          f"speedup: {result['speedup']:.1f}x)")
-    
+    print(
+        f"  Column Selection:          {result['winner']:12} wins  "
+        f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
+        f"speedup: {result['speedup']:.1f}x)"
+    )
+
     # ===========================================================================
     # Column assignment
     # ===========================================================================
     result = benchmark_operation(
         "Column Assignment",
         size,
-        lambda: (pd_df.copy().__setitem__('c', pd_df['a'] + pd_df['b']), None)[1],
-        lambda: (ppd_df.copy().__setitem__('c', ppd_df['a'] + ppd_df['b']), None)[1]
+        lambda: (pd_df.copy().__setitem__("c", pd_df["a"] + pd_df["b"]), None)[1],
+        lambda: (ppd_df.copy().__setitem__("c", ppd_df["a"] + ppd_df["b"]), None)[1],
     )
     results.append(result)
-    print(f"  Column Assignment:         {result['winner']:12} wins  "
-          f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
-          f"speedup: {result['speedup']:.1f}x)")
-    
+    print(
+        f"  Column Assignment:         {result['winner']:12} wins  "
+        f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
+        f"speedup: {result['speedup']:.1f}x)"
+    )
+
     # ===========================================================================
     # Filtering
     # ===========================================================================
@@ -102,28 +106,32 @@ for size in sizes:
     result = benchmark_operation(
         "Filtering",
         size,
-        lambda: pd_df[pd_df['a'] > threshold],
-        lambda: ppd_df.filter(ppd_df['a'] > threshold)
+        lambda: pd_df[pd_df["a"] > threshold],
+        lambda: ppd_df.filter(ppd_df["a"] > threshold),
     )
     results.append(result)
-    print(f"  Filtering:                 {result['winner']:12} wins  "
-          f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
-          f"speedup: {result['speedup']:.1f}x)")
-    
+    print(
+        f"  Filtering:                 {result['winner']:12} wins  "
+        f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
+        f"speedup: {result['speedup']:.1f}x)"
+    )
+
     # ===========================================================================
     # Aggregation
     # ===========================================================================
     result = benchmark_operation(
         "Aggregation (mean)",
         size,
-        lambda: pd_df['a'].mean(),
-        lambda: ppd_df['a'].mean()
+        lambda: pd_df["a"].mean(),
+        lambda: ppd_df["a"].mean(),
     )
     results.append(result)
-    print(f"  Aggregation:               {result['winner']:12} wins  "
-          f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
-          f"speedup: {result['speedup']:.1f}x)")
-    
+    print(
+        f"  Aggregation:               {result['winner']:12} wins  "
+        f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
+        f"speedup: {result['speedup']:.1f}x)"
+    )
+
     # ===========================================================================
     # Sorting
     # ===========================================================================
@@ -132,38 +140,42 @@ for size in sizes:
         random.shuffle(shuffled)
         pd_df_shuffle = pd.DataFrame({"a": shuffled, "b": list(range(size))})
         ppd_df_shuffle = ppd.DataFrame({"a": shuffled.copy(), "b": list(range(size))})
-        
+
         result = benchmark_operation(
             "Sorting",
             size,
-            lambda: pd_df_shuffle.sort_values('a'),
-            lambda: ppd_df_shuffle.sort_values('a')
+            lambda: pd_df_shuffle.sort_values("a"),
+            lambda: ppd_df_shuffle.sort_values("a"),
         )
         results.append(result)
-        print(f"  Sorting:                   {result['winner']:12} wins  "
-              f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
-              f"speedup: {result['speedup']:.1f}x)")
-    
+        print(
+            f"  Sorting:                   {result['winner']:12} wins  "
+            f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
+            f"speedup: {result['speedup']:.1f}x)"
+        )
+
     # ===========================================================================
     # GroupBy (if size allows)
     # ===========================================================================
     if size >= 1000:
         num_groups = min(100, size // 10)
-        groups = [f'Group_{i % num_groups}' for i in range(size)]
+        groups = [f"Group_{i % num_groups}" for i in range(size)]
         pd_df_gb = pd.DataFrame({"group": groups, "value": list(range(size))})
         ppd_df_gb = ppd.DataFrame({"group": groups, "value": list(range(size))})
-        
+
         result = benchmark_operation(
             "GroupBy",
             size,
-            lambda: pd_df_gb.groupby('group')['value'].mean(),
-            lambda: ppd_df_gb.groupby('group').agg(ppd_df_gb['value'].mean()),
-            iterations=3
+            lambda: pd_df_gb.groupby("group")["value"].mean(),
+            lambda: ppd_df_gb.groupby("group").agg(ppd_df_gb["value"].mean()),
+            iterations=3,
         )
         results.append(result)
-        print(f"  GroupBy:                   {result['winner']:12} wins  "
-              f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
-              f"speedup: {result['speedup']:.1f}x)")
+        print(
+            f"  GroupBy:                   {result['winner']:12} wins  "
+            f"(pandas: {result['pandas_ms']:.3f}ms, polarpandas: {result['polarpandas_ms']:.3f}ms, "
+            f"speedup: {result['speedup']:.1f}x)"
+        )
 
 
 # ===========================================================================
@@ -179,38 +191,45 @@ by_size = {}
 by_operation = {}
 
 for r in results:
-    size = r['size']
-    op = r['operation']
-    
+    size = r["size"]
+    op = r["operation"]
+
     if size not in by_size:
-        by_size[size] = {'pandas': 0, 'polarpandas': 0}
-    by_size[size][r['winner']] += 1
-    
+        by_size[size] = {"pandas": 0, "polarpandas": 0}
+    by_size[size][r["winner"]] += 1
+
     if op not in by_operation:
-        by_operation[op] = {'pandas': 0, 'polarpandas': 0, 'pandas_wins_at': [], 'polarpandas_wins_at': []}
-    by_operation[op][r['winner']] += 1
-    if r['winner'] == 'pandas':
-        by_operation[op]['pandas_wins_at'].append(size)
+        by_operation[op] = {
+            "pandas": 0,
+            "polarpandas": 0,
+            "pandas_wins_at": [],
+            "polarpandas_wins_at": [],
+        }
+    by_operation[op][r["winner"]] += 1
+    if r["winner"] == "pandas":
+        by_operation[op]["pandas_wins_at"].append(size)
     else:
-        by_operation[op]['polarpandas_wins_at'].append(size)
+        by_operation[op]["polarpandas_wins_at"].append(size)
 
 # Print analysis by size
 print("📊 Performance by Dataset Size:")
 print("-" * 90)
 for size in sorted(by_size.keys()):
-    pd_wins = by_size[size]['pandas']
-    ppd_wins = by_size[size]['polarpandas']
+    pd_wins = by_size[size]["pandas"]
+    ppd_wins = by_size[size]["polarpandas"]
     total = pd_wins + ppd_wins
-    print(f"  {size:>8,} rows: polarpandas wins {ppd_wins}/{total} operations ({ppd_wins/total*100:.0f}%)")
+    print(
+        f"  {size:>8,} rows: polarpandas wins {ppd_wins}/{total} operations ({ppd_wins / total * 100:.0f}%)"
+    )
 
 print()
 print("📈 Performance by Operation Type:")
 print("-" * 90)
 for op, data in sorted(by_operation.items()):
-    pd_wins = data['pandas']
-    ppd_wins = data['polarpandas']
+    pd_wins = data["pandas"]
+    ppd_wins = data["polarpandas"]
     total = pd_wins + ppd_wins
-    
+
     if ppd_wins > pd_wins:
         print(f"  {op:<25} ⚡ polarpandas better ({ppd_wins}/{total})")
     elif pd_wins > ppd_wins:
@@ -227,15 +246,15 @@ print("💡 RECOMMENDATION: Should we use a hybrid approach?")
 print("=" * 90)
 print()
 
-polarpandas_total_wins = sum(1 for r in results if r['winner'] == 'polarpandas')
-pandas_total_wins = sum(1 for r in results if r['winner'] == 'pandas')
+polarpandas_total_wins = sum(1 for r in results if r["winner"] == "polarpandas")
+pandas_total_wins = sum(1 for r in results if r["winner"] == "pandas")
 
 print(f"Overall: polarpandas wins {polarpandas_total_wins}/{len(results)} benchmarks")
 print()
 
 # Calculate average speedup for polarpandas wins
-ppd_speedups = [r['speedup'] for r in results if r['winner'] == 'polarpandas']
-pd_speedups = [1/r['speedup'] for r in results if r['winner'] == 'pandas']
+ppd_speedups = [r["speedup"] for r in results if r["winner"] == "polarpandas"]
+pd_speedups = [1 / r["speedup"] for r in results if r["winner"] == "pandas"]
 
 if ppd_speedups:
     avg_ppd_speedup = sum(ppd_speedups) / len(ppd_speedups)
@@ -250,7 +269,9 @@ print("🎯 VERDICT:")
 print()
 
 if polarpandas_total_wins >= len(results) * 0.7:
-    print("  ✅ Polarpandas wins in most cases ({:.0f}%)".format(polarpandas_total_wins/len(results)*100))
+    print(
+        f"  ✅ Polarpandas wins in most cases ({polarpandas_total_wins / len(results) * 100:.0f}%)"
+    )
     print("  ✅ Consistent performance advantages")
     print("  ⚠️  Hybrid approach adds complexity without major benefits")
     print()
@@ -269,4 +290,3 @@ print()
 print("=" * 90)
 print("✨ Conclusion: polarpandas provides excellent performance across the board!")
 print("=" * 90)
-
