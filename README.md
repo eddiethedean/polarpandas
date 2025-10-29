@@ -63,7 +63,7 @@ shape: (3, 6)
 └─────────┴─────┴─────────┴─────────────┴────────────┴────────────┘
 ```
 
-## 🎯 What's New in v0.3.0
+## 🎯 What's New in v0.3.1
 
 ### 📚 **Comprehensive Documentation**
 - ✅ **Upgraded all docstrings** - Professional NumPy-style documentation throughout
@@ -411,7 +411,14 @@ pip install -e ".[dev,test]"
 
 ## 📈 **Roadmap**
 
-### **v0.3.0 (Current)**
+### **v0.3.1 (Current)**
+
+#### Bug Fixes and CI Improvements
+- ✅ Fixed GitHub Actions workflow dependencies (pytest, pandas, numpy, pyarrow)
+- ✅ Fixed Windows file handling issues in I/O tests (28 tests now passing)
+- ✅ All platforms (Ubuntu, macOS, Windows) now passing all 457 tests
+
+### **v0.3.0**
 - ✅ **Comprehensive Documentation** - Professional docstrings for all public APIs
 - ✅ **LazyFrame Class** - Optional lazy execution for maximum performance
 - ✅ **Lazy I/O Operations** - `scan_csv()`, `scan_parquet()`, `scan_json()`
