@@ -5,7 +5,6 @@ All tests compare polarpandas output against actual pandas output
 to ensure 100% compatibility.
 """
 
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -323,7 +322,9 @@ class TestStatisticalMethodsComprehensive:
 
         # Original should be unchanged
         pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())
+        pd.testing.assert_frame_equal(
+            original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas()
+        )
 
 
 class TestEdgeCases:

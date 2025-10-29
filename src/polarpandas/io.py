@@ -1,7 +1,34 @@
 """
 I/O operations for PolarPandas.
 
-Provides pandas-compatible I/O functions for reading and writing data.
+This module provides pandas-compatible functions for reading and writing data
+in various formats. It supports both eager loading (immediate) and lazy loading
+(deferred) operations for different file sizes and use cases.
+
+Functions
+---------
+Eager I/O (immediate loading):
+    read_csv, read_parquet, read_json, read_excel, read_sql, read_feather
+    Load data immediately into DataFrame
+
+Lazy I/O (deferred loading):
+    scan_csv, scan_parquet, scan_json
+    Load data lazily into LazyFrame for optimization
+
+Examples
+--------
+>>> import polarpandas as ppd
+>>> # Eager loading
+>>> df = ppd.read_csv("data.csv")
+>>> # Lazy loading for large files
+>>> lf = ppd.scan_csv("large_file.csv")
+>>> df = lf.collect()  # Materialize when ready
+
+Notes
+-----
+- Use eager I/O for small to medium files (< 1M rows)
+- Use lazy I/O for large files or when building complex query chains
+- Lazy I/O allows Polars to optimize the query plan before execution
 """
 
 from typing import Any
@@ -180,6 +207,7 @@ def scan_csv(path: str, **kwargs: Any) -> LazyFrame:
     >>> df = lf.collect()  # Materialize when ready
     """
     import polars as pl
+
     return LazyFrame(pl.scan_csv(path, **kwargs))
 
 
@@ -206,6 +234,7 @@ def scan_parquet(path: str, **kwargs: Any) -> LazyFrame:
     >>> df = lf.collect()  # Materialize when ready
     """
     import polars as pl
+
     return LazyFrame(pl.scan_parquet(path, **kwargs))
 
 
@@ -232,4 +261,5 @@ def scan_json(path: str, **kwargs: Any) -> LazyFrame:
     >>> df = lf.collect()  # Materialize when ready
     """
     import polars as pl
+
     return LazyFrame(pl.scan_ndjson(path, **kwargs))

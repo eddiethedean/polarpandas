@@ -71,6 +71,67 @@ class TestModuleConcatMerge:
         assert "val1" in result.columns
         assert "val2" in result.columns
 
+    def test_merge_invalid_how_raises_error(self):
+        """Test merge raises error for invalid 'how' parameter."""
+        import pytest
+
+        df1 = ppd.DataFrame({"key": ["A", "B"], "val1": [1, 2]})
+        df2 = ppd.DataFrame({"key": ["A", "B"], "val2": [3, 4]})
+
+        # Invalid 'how' value - Polars will raise an error
+        # The exact error depends on Polars implementation
+        with pytest.raises(
+            (ValueError, TypeError)
+        ):  # Polars may raise ValueError or TypeError
+            ppd.merge(df1, df2, on="key", how="invalid")
+
+    def test_concat_empty_dataframes(self):
+        """Test concat with empty DataFrames."""
+        # Empty DataFrames
+        df1 = ppd.DataFrame()
+        df2 = ppd.DataFrame()
+
+        result = ppd.concat([df1, df2])
+        assert isinstance(result, ppd.DataFrame)
+
+        # Empty and non-empty
+        df3 = ppd.DataFrame({"a": [1, 2]})
+        result = ppd.concat([df1, df3])
+        assert isinstance(result, ppd.DataFrame)
+        assert len(result) == 2
+
+    def test_get_dummies_prefix_combinations(self):
+        """Test get_dummies with various parameter combinations."""
+        s = ppd.Series(["a", "b", "a", "c"])
+
+        # Basic get_dummies
+        result = ppd.get_dummies(s)
+        assert isinstance(result, ppd.DataFrame)
+
+        # With separator - polars uses separator, not prefix_sep
+        try:
+            result = ppd.get_dummies(s, separator="_")
+            assert isinstance(result, ppd.DataFrame)
+        except TypeError:
+            # separator parameter may not be supported
+            pass
+
+        # DataFrame version
+        df = ppd.DataFrame({"col1": ["a", "b"], "col2": [1, 2]})
+        result = ppd.get_dummies(df, columns=["col1"])
+        assert isinstance(result, ppd.DataFrame)
+
+    def test_get_dummies_unsupported_type(self):
+        """Test get_dummies raises error for unsupported types."""
+        import pytest
+
+        # Unsupported type
+        with pytest.raises(ValueError, match="Unsupported type"):
+            ppd.get_dummies(123)  # Integer not supported
+
+        with pytest.raises(ValueError, match="Unsupported type"):
+            ppd.get_dummies("abc")  # String not supported
+
 
 class TestModuleDataFunctions:
     """Test data manipulation functions."""
@@ -123,6 +184,39 @@ class TestModuleDatetimeFunctions:
         """Test ppd.to_datetime() with list."""
         dates = ppd.to_datetime(["2021-01-01", "2021-01-02"])
         assert dates is not None
+
+    def test_date_range_missing_parameters(self):
+        """Test date_range raises ValueError when required parameters missing."""
+        import pytest
+
+        # Missing both start/end and periods
+        with pytest.raises(ValueError, match="Must specify either"):
+            ppd.date_range()
+
+        # Missing periods when only start provided
+        with pytest.raises(ValueError, match="Must specify either"):
+            ppd.date_range(start="2021-01-01")
+
+        # Missing start when only periods provided
+        with pytest.raises(ValueError, match="Must specify either"):
+            ppd.date_range(periods=5)
+
+        # Missing start when only end provided
+        with pytest.raises(ValueError, match="Must specify either"):
+            ppd.date_range(end="2021-01-10")
+
+    def test_to_datetime_invalid_type(self):
+        """Test to_datetime raises ValueError for unsupported types."""
+        import pytest
+
+        # Unsupported type
+        with pytest.raises(ValueError, match="Unsupported type"):
+            ppd.to_datetime(123)  # Integer not supported
+
+        with pytest.raises(ValueError, match="Unsupported type"):
+            ppd.to_datetime(
+                "2021-01-01"
+            )  # String not supported (only list or DataFrame)
 
 
 class TestModuleUtilityFunctions:

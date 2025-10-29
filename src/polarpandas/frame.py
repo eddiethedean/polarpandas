@@ -1,6 +1,29 @@
 """
-A DataFrame object that behaves like a pandas DataFrame
-but using polars DataFrame to do all the work.
+DataFrame implementation with pandas-compatible API built on Polars.
+
+This module provides the main DataFrame class that wraps Polars DataFrame and
+provides a pandas-compatible interface. All operations are performed using
+Polars for optimal performance while maintaining pandas-like behavior.
+
+The DataFrame class supports:
+- Eager execution by default (like pandas)
+- Mutable operations with inplace parameter support
+- Index preservation across operations
+- Full pandas API compatibility where implemented
+- Direct access to Polars methods via delegation
+
+Examples
+--------
+>>> import polarpandas as ppd
+>>> df = ppd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+>>> df["C"] = df["A"] * 2
+>>> result = df.groupby("A").agg(pl.col("B").sum())
+
+Notes
+-----
+- DataFrame operations are always eager (executed immediately)
+- Use LazyFrame for lazy evaluation and query optimization
+- Some pandas behaviors may differ due to Polars architecture
 """
 
 from typing import (
@@ -20,16 +43,66 @@ import polars as pl
 from polarpandas.index import Index
 
 if TYPE_CHECKING:
-    from .series import Series
     from .lazyframe import LazyFrame
+    from .series import Series
 
 
 class DataFrame:
     """
-    A mutable DataFrame wrapper around Polars DataFrame with pandas-like API.
+    Two-dimensional, size-mutable, potentially heterogeneous tabular data.
 
-    This class wraps a Polars DataFrame and provides a pandas-compatible interface
-    with eager execution by default, similar to pandas.
+    DataFrame is the primary data structure in PolarPandas, providing a pandas-like
+    API while using Polars for all operations under the hood. This offers the
+    best of both worlds: familiar pandas syntax with Polars performance.
+
+    Parameters
+    ----------
+    data : dict, list of dicts, pl.DataFrame, pl.LazyFrame, or None, optional
+        Input data. Can be:
+        - Dictionary of {column_name: [values]} pairs
+        - List of dictionaries (each dict becomes a row)
+        - Existing Polars DataFrame
+        - Existing Polars LazyFrame (will be materialized)
+        - None for empty DataFrame
+    index : array-like, optional
+        Index to use for resulting DataFrame. If None, a default integer
+        index will be used.
+    columns : array-like, optional
+        Column names for empty DataFrame. Ignored if data is not None.
+    **kwargs
+        Additional keyword arguments passed to Polars DataFrame constructor.
+
+    Attributes
+    ----------
+    _df : pl.DataFrame
+        The underlying Polars DataFrame.
+    _index : list or None
+        Stored index values for pandas compatibility.
+    _index_name : str, tuple, or None
+        Name(s) for the index.
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> # From dictionary
+    >>> df = ppd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+    >>> # From list of dicts
+    >>> df = ppd.DataFrame([{"A": 1, "B": 2}, {"A": 3, "B": 4}])
+    >>> # Empty DataFrame
+    >>> df = ppd.DataFrame(columns=["A", "B"])
+    >>> # With index
+    >>> df = ppd.DataFrame({"A": [1, 2]}, index=["x", "y"])
+
+    See Also
+    --------
+    LazyFrame : For lazy execution and query optimization
+    Series : One-dimensional labeled array
+
+    Notes
+    -----
+    - All operations execute immediately (eager execution)
+    - Use `.lazy()` to convert to LazyFrame for lazy evaluation
+    - Index operations may be slower due to Polars' columnar architecture
     """
 
     _index: Optional[List[Any]]
@@ -39,24 +112,54 @@ class DataFrame:
 
     def __init__(
         self,
-        data: Optional[Union[Dict[str, Any], List[Any], pl.DataFrame, pl.LazyFrame]] = None,
+        data: Optional[
+            Union[Dict[str, Any], List[Any], pl.DataFrame, pl.LazyFrame]
+        ] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         """
         Initialize a DataFrame from various data sources.
 
+        Create a new DataFrame instance from the provided data. The data can be
+        provided in multiple formats, similar to pandas DataFrame constructor.
+
         Parameters
         ----------
-        data : dict, list, pl.DataFrame, pl.LazyFrame, or None
-            Data to initialize the DataFrame with. Can be:
-            - Dictionary of column names to values
-            - List of dictionaries
-            - Existing Polars DataFrame
-            - Existing Polars LazyFrame (will be materialized)
+        data : dict, list of dicts, pl.DataFrame, pl.LazyFrame, or None, optional
+            Data to initialize the DataFrame with. Supported formats:
+            - Dictionary mapping column names to lists/arrays of values
+            - List of dictionaries (each dict becomes a row)
+            - Existing Polars DataFrame (used directly)
+            - Existing Polars LazyFrame (materialized automatically)
             - None for empty DataFrame
         index : array-like, optional
-            Index to use for resulting frame
+            Index to use for resulting DataFrame. If provided, must have same
+            length as data rows. Stored separately for pandas compatibility.
+        columns : array-like, optional
+            Column names for empty DataFrame. Ignored if data is provided.
+        strict : bool, default True
+            Whether to use strict mode for Polars DataFrame creation.
+        **kwargs
+            Additional keyword arguments passed to Polars DataFrame constructor.
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> # From dictionary
+        >>> df = ppd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+        >>> # From list of dicts
+        >>> df = ppd.DataFrame([{"A": 1, "B": 2}, {"A": 3, "B": 4}])
+        >>> # Empty with columns
+        >>> df = ppd.DataFrame(columns=["A", "B"])
+        >>> # With custom index
+        >>> df = ppd.DataFrame({"value": [10, 20]}, index=["x", "y"])
+
+        Notes
+        -----
+        - LazyFrames are automatically materialized during initialization
+        - Index is stored separately and not part of Polars DataFrame structure
+        - Dictionary keys become column names, values become column data
         """
         if data is None:
             # Handle columns and index parameters for empty DataFrame
@@ -141,8 +244,34 @@ class DataFrame:
                 self._columns_index = None
 
     def lazy(self) -> "LazyFrame":
-        """Convert to LazyFrame for lazy execution."""
+        """
+        Convert DataFrame to LazyFrame for lazy execution.
+
+        Creates a new LazyFrame from the current DataFrame. All subsequent
+        operations on the LazyFrame will be deferred until `.collect()` is called,
+        allowing Polars to optimize the query plan.
+
+        Returns
+        -------
+        LazyFrame
+            LazyFrame wrapping the current DataFrame data
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> import polars as pl
+        >>> df = ppd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+        >>> lf = df.lazy()
+        >>> result = lf.filter(pl.col("A") > 1).select(["A", "B"])
+        >>> df_final = result.collect()  # Materialize when ready
+
+        See Also
+        --------
+        LazyFrame : For lazy execution and query optimization
+        LazyFrame.collect : Materialize the lazy query plan
+        """
         from polarpandas.lazyframe import LazyFrame
+
         return LazyFrame(self._df.lazy())
 
     @classmethod
@@ -197,6 +326,7 @@ class DataFrame:
                 # Convert to pandas EmptyDataError
                 try:
                     import pandas as pd
+
                     raise pd.errors.EmptyDataError(
                         "No columns to parse from file"
                     ) from e
@@ -353,58 +483,87 @@ class DataFrame:
 
     def __repr__(self) -> str:
         """Return string representation of the DataFrame."""
-        materialized = self._df
-        return repr(materialized)
+        return repr(self._df)
 
     def __str__(self) -> str:
         """Return string representation of the DataFrame."""
-        materialized = self._df
-        return str(materialized)
+        return str(self._df)
 
     def __len__(self) -> int:
         """Return the number of rows in the DataFrame."""
-        materialized = self._df
-        return len(materialized)
+        return len(self._df)
 
     def __getitem__(self, key: Union[str, List[str]]) -> Union["DataFrame", "Series"]:
         """
-        Get a column or subset of the DataFrame.
+        Access a column or subset of columns from the DataFrame.
+
+        This method provides column selection similar to pandas DataFrame indexing.
+        Returns a Series for single column selection, or DataFrame for multiple columns.
 
         Parameters
         ----------
-        key : str or other
-            Column name or selection key
+        key : str, list of str, or Series
+            Column selection key:
+            - str: Single column name, returns Series
+            - list of str: Multiple column names, returns DataFrame
+            - Series: Boolean indexing, returns filtered DataFrame
+            - array-like: Boolean array for filtering rows
 
         Returns
         -------
-        Column data or DataFrame subset
+        Series or DataFrame
+            - Series if key is a single column name
+            - DataFrame if key is a list of column names or boolean array
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> df = ppd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+        >>> # Single column
+        >>> series = df["A"]  # Returns Series
+        >>> # Multiple columns
+        >>> subset = df[["A", "B"]]  # Returns DataFrame
+        >>> # Boolean indexing
+        >>> filtered = df[df["A"] > 1]  # Returns filtered DataFrame
+
+        Raises
+        ------
+        KeyError
+            If column name is not found in DataFrame
+
+        See Also
+        --------
+        loc : Label-based selection
+        iloc : Integer position-based selection
         """
         try:
             from polarpandas.series import Series
+
             if isinstance(key, str):
-                # Single column - materialize and return Series
-                materialized = self._df
-                self._df = materialized  # Materialize the DataFrame
-                return Series(materialized[key])
+                # Single column - return Series
+                return Series(self._df[key])
             elif isinstance(key, list):
-                # Multiple columns - stay lazy
-                result_lazy = self._df.select(key)
-                return DataFrame(result_lazy)
-            elif hasattr(key, '__iter__') and not isinstance(key, str) or isinstance(key, Series):
-                # Boolean indexing with Series or array-like
-                # Materialize to handle boolean indexing
-                materialized = self._df
-                if isinstance(key, Series):
-                    # Convert polarpandas Series to polars Series for indexing
-                    polars_key = key._series
-                else:
-                    polars_key = key
+                # Multiple columns - select and return DataFrame
+                result_df = self._df.select(key)
+                return DataFrame(result_df)
+            elif isinstance(key, Series):  # type: ignore[unreachable]
+                # Boolean indexing with Series
+                polars_key = key._series
+                filtered = self._df.filter(polars_key)
+                return DataFrame(filtered)
+            elif (
+                hasattr(key, "__iter__")
+                and not isinstance(key, str)
+                and not isinstance(key, list)
+            ):
+                # Boolean indexing with array-like (but not list, which is handled above)
+                polars_key = key
                 # Use filter for boolean indexing
-                filtered = materialized.filter(polars_key)
+                filtered = self._df.filter(polars_key)
                 return DataFrame(filtered)
             else:
                 # Other key types - delegate to Polars
-                return self._df.__getitem__(key)  # type: ignore[return-value]
+                return self._df.__getitem__(key)
         except Exception as e:
             # Convert Polars exceptions to pandas-compatible ones
             if "not found" in str(e).lower() or "ColumnNotFoundError" in str(type(e)):
@@ -415,15 +574,47 @@ class DataFrame:
         """
         Set a column in the DataFrame (in-place mutation).
 
+        Add or update a column in the DataFrame. If the column already exists,
+        it will be overwritten. This operation modifies the DataFrame in place.
+
         Parameters
         ----------
         column : str
-            Column name
-        values : array-like, scalar, or Series
-            Values to set
+            Column name. If column exists, it will be overwritten; otherwise,
+            a new column will be created.
+        values : array-like, scalar, Series, or polarpandas.Series
+            Values to assign to the column. Can be:
+            - List or array-like: Must match DataFrame length
+            - Scalar: Broadcast to all rows
+            - polarpandas.Series: Uses underlying Polars Series
+            - polars.Series: Used directly
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> df = ppd.DataFrame({"A": [1, 2, 3]})
+        >>> # Add new column with list
+        >>> df["B"] = [4, 5, 6]
+        >>> # Add column with scalar (broadcasts)
+        >>> df["constant"] = 10
+        >>> # Add column from Series
+        >>> df["C"] = df["A"] * 2
+        >>> # Overwrite existing column
+        >>> df["A"] = [10, 20, 30]
+
+        Notes
+        -----
+        - This operation is always in-place (modifies self)
+        - Column is added or updated immediately
+        - Values are converted to Polars Series internally
         """
+        from .series import Series as PolarPandasSeries
+
         # Convert values to Polars Series if needed
-        if isinstance(values, pl.Series):
+        if isinstance(values, PolarPandasSeries):
+            # Handle polarpandas Series - extract underlying Polars Series
+            series = values._series.alias(column)
+        elif isinstance(values, pl.Series):
             series = values.alias(column)
         elif isinstance(values, (int, float, str, bool)):
             # Scalar value - use Polars lit() to broadcast
@@ -457,18 +648,43 @@ class DataFrame:
         """
         Drop specified columns from DataFrame.
 
+        Remove one or more columns from the DataFrame. This operation can be
+        performed in-place or return a new DataFrame.
+
         Parameters
         ----------
         columns : str or list of str
-            Column(s) to drop
+            Column name(s) to drop. Can be a single column name or a list
+            of column names.
         inplace : bool, default False
             If True, modify DataFrame in place and return None.
-            If False, return a new DataFrame.
+            If False, return a new DataFrame with columns dropped.
 
         Returns
         -------
         DataFrame or None
-            DataFrame with columns dropped, or None if inplace=True
+            DataFrame with specified columns removed, or None if inplace=True.
+            If inplace=False, returns a new DataFrame; original is unchanged.
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> df = ppd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+        >>> # Drop single column
+        >>> df_dropped = df.drop("A")
+        >>> # Drop multiple columns
+        >>> df_dropped = df.drop(["A", "B"])
+        >>> # In-place drop
+        >>> df.drop("A", inplace=True)  # Modifies df, returns None
+
+        Raises
+        ------
+        KeyError
+            If any specified column name does not exist in the DataFrame
+
+        See Also
+        --------
+        rename : Rename columns instead of dropping them
         """
         # Polars drop() accepts both str and list
         try:
@@ -492,22 +708,49 @@ class DataFrame:
         inplace: bool = False,
     ) -> Optional["DataFrame"]:
         """
-        Rename columns.
+        Rename DataFrame columns.
+
+        Change column names by providing a mapping from old names to new names.
+        Non-existent columns in the mapping are silently ignored (matching pandas
+        behavior).
 
         Parameters
         ----------
         mapping : dict, optional
-            Mapping of old column names to new column names (deprecated, use columns)
+            Mapping of {old_name: new_name} pairs. Deprecated, use `columns` instead.
         columns : dict, optional
-            Mapping of old column names to new column names
+            Mapping of {old_name: new_name} pairs. If both `mapping` and `columns`
+            are provided, `columns` takes precedence.
         inplace : bool, default False
             If True, modify DataFrame in place and return None.
-            If False, return a new DataFrame.
+            If False, return a new DataFrame with renamed columns.
 
         Returns
         -------
         DataFrame or None
-            DataFrame with renamed columns, or None if inplace=True
+            DataFrame with renamed columns, or None if inplace=True.
+            Non-existent column names in the mapping are ignored.
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> df = ppd.DataFrame({"old_name": [1, 2, 3]})
+        >>> # Rename single column
+        >>> df_renamed = df.rename(columns={"old_name": "new_name"})
+        >>> # Rename multiple columns
+        >>> df = ppd.DataFrame({"A": [1], "B": [2]})
+        >>> df_renamed = df.rename(columns={"A": "Alpha", "B": "Beta"})
+        >>> # In-place rename
+        >>> df.rename(columns={"A": "Alpha"}, inplace=True)
+
+        Notes
+        -----
+        - Non-existent column names are silently ignored (pandas behavior)
+        - If mapping is empty or all columns don't exist, returns unchanged DataFrame
+
+        See Also
+        --------
+        drop : Remove columns instead of renaming
         """
         # Use columns parameter if provided, otherwise use mapping
         rename_dict = columns if columns is not None else mapping
@@ -537,22 +780,49 @@ class DataFrame:
         self, by: Union[str, List[str]], inplace: bool = False, **kwargs: Any
     ) -> Optional["DataFrame"]:
         """
-        Sort DataFrame by column values.
+        Sort DataFrame by one or more column values.
+
+        Sort the DataFrame by the values in specified column(s). When sorting
+        by multiple columns, the first column takes precedence, then the second,
+        and so on.
 
         Parameters
         ----------
         by : str or list of str
-            Column name(s) to sort by
+            Column name(s) to sort by. If a list, sorts by first column first,
+            then by second column, etc.
         inplace : bool, default False
             If True, modify DataFrame in place and return None.
-            If False, return a new DataFrame.
-        **kwargs : additional arguments
-            Additional arguments passed to Polars sort()
+            If False, return a new sorted DataFrame.
+        **kwargs
+            Additional arguments passed to Polars sort(). Common options:
+            - descending: bool or list of bool, default False
+              Sort in descending order. Can be a list matching `by` length.
+            - nulls_last: bool, default False
+              Place null values last in sorted order
 
         Returns
         -------
         DataFrame or None
-            Sorted DataFrame, or None if inplace=True
+            DataFrame sorted by specified columns, or None if inplace=True.
+            Original DataFrame is unchanged if inplace=False.
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> df = ppd.DataFrame({"A": [3, 1, 2], "B": [6, 4, 5]})
+        >>> # Sort by single column
+        >>> df_sorted = df.sort_values("A")
+        >>> # Sort by multiple columns
+        >>> df_sorted = df.sort_values(["A", "B"])
+        >>> # Descending sort
+        >>> df_sorted = df.sort_values("A", descending=True)
+        >>> # In-place sort
+        >>> df.sort_values("A", inplace=True)
+
+        See Also
+        --------
+        sort_index : Sort by index instead of column values
         """
         # Polars uses sort() instead of sort_values()
         result_df = self._df.sort(by, **kwargs)
@@ -628,8 +898,7 @@ class DataFrame:
     @property
     def shape(self) -> Tuple[int, int]:
         """Return a tuple representing the dimensionality of the DataFrame."""
-        materialized = self._df
-        rows, cols = materialized.shape
+        rows, cols = self._df.shape
         # If we have a stored index, use its length for rows
         if self._index is not None:
             rows = len(self._index)
@@ -638,14 +907,12 @@ class DataFrame:
     @property
     def empty(self) -> bool:
         """Return True if DataFrame is empty."""
-        materialized = self._df
-        return len(materialized) == 0
+        return len(self._df) == 0
 
     @property
     def values(self) -> Any:
         """Return the values of the DataFrame as a numpy array."""
-        materialized = self._df
-        return materialized.to_numpy()
+        return self._df.to_numpy()
 
     @property
     def dtypes(self) -> Any:
@@ -666,8 +933,7 @@ class DataFrame:
     @property
     def height(self) -> int:
         """Return the number of rows in the DataFrame."""
-        materialized = self._df
-        return materialized.height
+        return self._df.height
 
     @property
     def width(self) -> int:
@@ -682,8 +948,7 @@ class DataFrame:
             return Index(self._index)
         else:
             # Create a simple RangeIndex-like object
-            materialized = self._df
-            return Index(list(range(len(materialized))))
+            return Index(list(range(len(self._df))))
 
     @property
     def loc(self) -> "_LocIndexer":
@@ -712,33 +977,73 @@ class DataFrame:
     # Methods
     def head(self, n: int = 5) -> "DataFrame":
         """
-        Return the first n rows.
+        Return the first n rows of the DataFrame.
+
+        Select and return the first n rows from the DataFrame. This is useful
+        for quickly inspecting the beginning of a large DataFrame.
 
         Parameters
         ----------
         n : int, default 5
-            Number of rows to return
+            Number of rows to return. Must be non-negative. If n exceeds the
+            number of rows, returns all rows.
 
         Returns
         -------
         DataFrame
-            First n rows of the DataFrame
+            New DataFrame containing the first n rows. Original DataFrame is
+            unchanged.
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> df = ppd.DataFrame({"A": range(10), "B": range(10, 20)})
+        >>> # Default: first 5 rows
+        >>> df.head()
+        >>> # First 3 rows
+        >>> df.head(3)
+        >>> # More rows than available returns all rows
+        >>> df.head(100)  # Returns all 10 rows
+
+        See Also
+        --------
+        tail : Return the last n rows
         """
         return DataFrame(self._df.head(n))
 
     def tail(self, n: int = 5) -> "DataFrame":
         """
-        Return the last n rows.
+        Return the last n rows of the DataFrame.
+
+        Select and return the last n rows from the DataFrame. This is useful
+        for quickly inspecting the end of a large DataFrame.
 
         Parameters
         ----------
         n : int, default 5
-            Number of rows to return
+            Number of rows to return. Must be non-negative. If n exceeds the
+            number of rows, returns all rows.
 
         Returns
         -------
         DataFrame
-            Last n rows of the DataFrame
+            New DataFrame containing the last n rows. Original DataFrame is
+            unchanged.
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> df = ppd.DataFrame({"A": range(10), "B": range(10, 20)})
+        >>> # Default: last 5 rows
+        >>> df.tail()
+        >>> # Last 3 rows
+        >>> df.tail(3)
+        >>> # More rows than available returns all rows
+        >>> df.tail(100)  # Returns all 10 rows
+
+        See Also
+        --------
+        head : Return the first n rows
         """
         return DataFrame(self._df.tail(n))
 
@@ -777,11 +1082,11 @@ class DataFrame:
         # Handle polarpandas Series by converting to polars Series
         processed_args = []
         for arg in args:
-            if hasattr(arg, '_series'):  # It's a polarpandas Series
+            if hasattr(arg, "_series"):  # It's a polarpandas Series
                 processed_args.append(arg._series)
             else:
                 processed_args.append(arg)
-        
+
         return DataFrame(self._df.filter(*processed_args, **kwargs))
 
     def with_columns(self, *exprs: Any, **named_exprs: Any) -> "DataFrame":
@@ -824,15 +1129,49 @@ class DataFrame:
         """
         Group DataFrame by one or more columns.
 
+        Split the DataFrame into groups based on values in one or more columns.
+        Returns a GroupBy object that can be used for aggregation operations.
+
         Parameters
         ----------
         by : str or list of str
-            Column name(s) to group by
+            Column name(s) to group by. Rows with the same values in these
+            columns will be grouped together.
+        *args
+            Additional positional arguments passed to Polars group_by().
+        **kwargs
+            Additional keyword arguments passed to Polars group_by().
 
         Returns
         -------
-        GroupBy
-            GroupBy object for aggregation
+        _GroupBy
+            GroupBy object that can be used for aggregation operations like
+            `.agg()`, `.mean()`, `.sum()`, etc.
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> import polars as pl
+        >>> df = ppd.DataFrame({
+        ...     "category": ["A", "B", "A", "B"],
+        ...     "value": [10, 20, 30, 40]
+        ... })
+        >>> # Group by single column
+        >>> gb = df.groupby("category")
+        >>> result = gb.agg(pl.col("value").mean())
+        >>> # Group by multiple columns
+        >>> gb = df.groupby(["category", "subcategory"])
+        >>> result = gb.agg(pl.col("value").sum())
+
+        Notes
+        -----
+        - GroupBy operations in Polars use expressions (e.g., pl.col("x").mean())
+          rather than string aggregation functions like pandas
+        - The GroupBy object is lazy; aggregations are computed when called
+
+        See Also
+        --------
+        _GroupBy : The GroupBy object returned by this method
         """
         # Polars uses group_by() instead of groupby()
         # Return a wrapper for the Polars GroupBy object
@@ -873,17 +1212,67 @@ class DataFrame:
 
     def merge(self, other: "DataFrame", *args: Any, **kwargs: Any) -> "DataFrame":
         """
-        Merge (join) with another DataFrame.
+        Merge (join) DataFrame with another DataFrame.
+
+        Perform a database-style join operation between two DataFrames. This
+        is similar to SQL JOIN operations and pandas merge().
 
         Parameters
         ----------
         other : DataFrame
-            DataFrame to merge with
+            Right DataFrame to merge with.
+        on : str or list of str, optional
+            Column name(s) to join on. Must exist in both DataFrames.
+            If not specified and `left_on`/`right_on` are not specified,
+            joins on columns with matching names.
+        how : {'inner', 'left', 'right', 'full', 'outer', 'semi', 'anti'}, default 'inner'
+            Type of join to perform:
+            - 'inner': Only matching rows from both DataFrames
+            - 'left': All rows from left DataFrame, matching from right
+            - 'right': All rows from right DataFrame, matching from left
+            - 'full'/'outer': All rows from both DataFrames
+            - 'semi': Rows from left that have matches in right (no right data)
+            - 'anti': Rows from left that have no matches in right
+        left_on : str or list of str, optional
+            Column(s) from left DataFrame to join on.
+        right_on : str or list of str, optional
+            Column(s) from right DataFrame to join on.
+        suffix : tuple of str, default ('_x', '_y')
+            Suffix to append to overlapping column names.
+        *args
+            Additional positional arguments passed to Polars join().
+        **kwargs
+            Additional keyword arguments passed to Polars join().
 
         Returns
         -------
         DataFrame
-            Merged DataFrame
+            New DataFrame containing the merged result. Original DataFrames
+            are unchanged.
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> left = ppd.DataFrame({"key": [1, 2, 3], "A": [10, 20, 30]})
+        >>> right = ppd.DataFrame({"key": [1, 2, 4], "B": [100, 200, 400]})
+        >>> # Inner join on 'key'
+        >>> result = left.merge(right, on="key")
+        >>> # Left join
+        >>> result = left.merge(right, on="key", how="left")
+        >>> # Different column names
+        >>> result = left.merge(right, left_on="key", right_on="other_key")
+
+        Notes
+        -----
+        - This operation converts both DataFrames to LazyFrames internally
+          for the join operation
+        - Result columns are the union of both DataFrames' columns
+        - Overlapping columns are suffixed according to the `suffix` parameter
+
+        See Also
+        --------
+        join : Alias for merge
+        concat : Concatenate DataFrames along axis
         """
         # Extract the underlying Polars DataFrame if other is wrapped
         if isinstance(other, DataFrame):
@@ -894,12 +1283,44 @@ class DataFrame:
             other_df = other  # type: ignore[unreachable]
 
         # Handle both DataFrame and LazyFrame cases
-        if hasattr(other_df, '_df'):
-            other_lazy = other_df._df.lazy() if isinstance(other_df._df, pl.DataFrame) else other_df._df
+        if hasattr(other_df, "_df"):
+            # Convert polarpandas DataFrame to LazyFrame
+            other_polars = other_df._df
+            if isinstance(other_polars, pl.DataFrame):
+                other_lazy = other_polars.lazy()
+            elif isinstance(other_polars, pl.LazyFrame):
+                other_lazy = other_polars
+            else:
+                # Handle PyDataFrame or other types
+                # PyDataFrame is the underlying Polars DataFrame, convert it properly
+                try:
+                    # Try to get the DataFrame and convert to LazyFrame
+                    if hasattr(other_polars, "collect"):
+                        # It's a LazyFrame that needs collecting first, then convert
+                        other_lazy = other_polars.collect().lazy()
+                    else:
+                        # Assume it's a PyDataFrame, wrap in DataFrame then lazy
+                        other_lazy = pl.DataFrame._from_pydf(other_polars).lazy()
+                except (AttributeError, TypeError):
+                    # Fallback: try to convert via pandas
+                    import pandas as pd
+
+                    other_lazy = pl.from_pandas(
+                        pd.DataFrame(other_polars.to_dict())
+                    ).lazy()
+        elif isinstance(other_df, pl.DataFrame):
+            # Convert Polars DataFrame to LazyFrame
+            other_lazy = other_df.lazy()
+        # Note: other_df should be pl.DataFrame after extraction from polarpandas DataFrame
+        elif hasattr(other_df, "lazy"):  # type: ignore[unreachable]
+            other_lazy = other_df.lazy()
         else:
-            other_lazy = other_df.lazy() if hasattr(other_df, 'lazy') else other_df
-        
-        return DataFrame(self._df.lazy().join(other_lazy, *args, **kwargs))
+            other_lazy = other_df
+
+        # self._df is always a DataFrame (not LazyFrame) in this class
+        self_lazy = self._df.lazy()
+
+        return DataFrame(self_lazy.join(other_lazy, *args, **kwargs))
 
     def join(self, other: "DataFrame", *args: Any, **kwargs: Any) -> "DataFrame":
         """
@@ -934,14 +1355,13 @@ class DataFrame:
 
         Prints the schema and summary information.
         """
-        materialized = self._df
         print("<class 'polarpandas.DataFrame'>")
         print(f"Columns: {len(self.columns)}")
         print(f"Rows: {len(self)}")
         print("\nColumn details:")
         for col in self.columns:
-            dtype = materialized[col].dtype
-            null_count = materialized[col].null_count()
+            dtype = self._df[col].dtype
+            null_count = self._df[col].null_count()
             print(f"  {col}: {dtype} (null values: {null_count})")
 
     def drop_duplicates(
@@ -1000,8 +1420,7 @@ class DataFrame:
             subset = self.columns
 
         # Use Polars is_duplicated()
-        materialized = self._df
-        result = materialized.is_duplicated()
+        result = self._df.is_duplicated()
         return Series(result)
 
     def is_duplicated(self) -> "Series":
@@ -1014,8 +1433,8 @@ class DataFrame:
             Boolean series indicating if each row is duplicated
         """
         from polarpandas.series import Series
-        materialized = self._df
-        result = materialized.is_duplicated()
+
+        result = self._df.is_duplicated()
         return Series(result)
 
     def sort_index(self, inplace: bool = False, **kwargs: Any) -> Optional["DataFrame"]:
@@ -1088,8 +1507,7 @@ class DataFrame:
             materialized_other = other._df
             return materialized_self.equals(materialized_other)
         elif isinstance(other, pl.DataFrame):
-            materialized = self._df
-            return materialized.equals(other)
+            return self._df.equals(other)
         return False
 
     def reset_index(
@@ -1168,8 +1586,7 @@ class DataFrame:
                 raise KeyError(f"'{key}'")
 
         # Check if any index columns contain nulls
-        materialized = self._df
-        has_nulls = any(materialized[key].null_count() > 0 for key in keys)
+        has_nulls = any(self._df[key].null_count() > 0 for key in keys)
 
         if has_nulls:
             # Polars has limited null handling in index - this is a limitation
@@ -1183,9 +1600,9 @@ class DataFrame:
                 # Append to existing index - create tuples
                 existing_index = list(self._index)
                 if len(keys) == 1:
-                    new_values = materialized[keys[0]].to_list()
+                    new_values = self._df[keys[0]].to_list()
                 else:
-                    new_values = list(zip(*[materialized[key].to_list() for key in keys]))
+                    new_values = list(zip(*[self._df[key].to_list() for key in keys]))
 
                 # Create tuples of (existing_index[i], new_values[i])
                 new_index = []
@@ -1207,11 +1624,11 @@ class DataFrame:
             else:
                 # Replace index
                 if len(keys) == 1:
-                    self._index = materialized[keys[0]].to_list()
+                    self._index = self._df[keys[0]].to_list()
                     self._index_name = keys[0]
                 else:
                     # Multi-level index - create tuples
-                    new_values = list(zip(*[materialized[key].to_list() for key in keys]))
+                    new_values = list(zip(*[self._df[key].to_list() for key in keys]))
                     self._index = new_values
                     self._index_name = tuple(keys)  # Store as tuple for hashability
 
@@ -1222,7 +1639,7 @@ class DataFrame:
                     self._df = self._df.select(columns_to_keep)
                 else:
                     # If all columns are used as index, create empty DataFrame with index
-                    self._df = pl.DataFrame().lazy()
+                    self._df = pl.DataFrame()
 
             return None
         else:
@@ -1233,9 +1650,9 @@ class DataFrame:
                 # Append to existing index - create tuples
                 existing_index = list(self._index)
                 if len(keys) == 1:
-                    new_values = materialized[keys[0]].to_list()
+                    new_values = result._df[keys[0]].to_list()
                 else:
-                    new_values = list(zip(*[materialized[key].to_list() for key in keys]))
+                    new_values = list(zip(*[result._df[key].to_list() for key in keys]))
 
                 # Create tuples of (existing_index[i], new_values[i])
                 new_index = []
@@ -1261,7 +1678,7 @@ class DataFrame:
                     result._index_name = keys[0]
                 else:
                     # Multi-level index - create tuples
-                    new_values = list(zip(*[materialized[key].to_list() for key in keys]))
+                    new_values = list(zip(*[result._df[key].to_list() for key in keys]))
                     result._index = new_values
                     result._index_name = tuple(keys)  # Store as tuple for hashability
 
@@ -1293,8 +1710,7 @@ class DataFrame:
         column_names = self._index if self._index else None
 
         try:
-            materialized = self._df
-            transposed = materialized.transpose(
+            transposed = self._df.transpose(
                 include_header=False, column_names=column_names
             )
             result = DataFrame(transposed)
@@ -1366,8 +1782,7 @@ class DataFrame:
                     )
 
                 # Create a temporary DataFrame with renamed columns
-                materialized = self._df
-                temp_df = materialized.rename(dict(zip(original_columns, header)))
+                temp_df = self._df.rename(dict(zip(original_columns, header)))
 
                 # Write the temporary DataFrame
                 if path is None:
@@ -1383,11 +1798,10 @@ class DataFrame:
 
         # If index=False, use Polars write_csv directly
         if not index_param:
-            materialized = self._df
             if path is None:
-                return materialized.write_csv(**polars_kwargs)  # type: ignore[no-any-return]
+                return self._df.write_csv(**polars_kwargs)  # type: ignore[no-any-return]
             else:
-                materialized.write_csv(path, **polars_kwargs)
+                self._df.write_csv(path, **polars_kwargs)
                 return None
 
         # Handle index=True case (convert to pandas and back)
@@ -1416,8 +1830,7 @@ class DataFrame:
         **kwargs
             Additional arguments passed to Polars write_parquet()
         """
-        materialized = self._df
-        materialized.write_parquet(path, **kwargs)
+        self._df.write_parquet(path, **kwargs)
 
     def to_json(self, path: Optional[str] = None, **kwargs: Any) -> Optional[str]:
         """
@@ -1442,11 +1855,10 @@ class DataFrame:
         }
 
         try:
-            materialized = self._df
             if path is None:
-                return materialized.write_json()
+                return self._df.write_json()
             else:
-                materialized.write_json(path, **polars_kwargs)
+                self._df.write_json(path, **polars_kwargs)
                 return None
         except Exception as e:
             # If Polars JSON write fails, this is a limitation
@@ -1473,12 +1885,15 @@ class DataFrame:
             ) from e
 
         # Convert Polars DataFrame to pandas
-        materialized = self._df
-        pandas_df = materialized.to_pandas()
+        # self._df should always be a DataFrame, but check defensively
+        polars_df = self._df
+        if hasattr(polars_df, "collect"):
+            polars_df = polars_df.collect()
+        pandas_df = polars_df.to_pandas()
 
         # Set index if we have one
         if self._index is not None:
-            pandas_df.index = self._index  # type: ignore[assignment]
+            pandas_df.index = self._index
             if self._index_name is not None:
                 # Handle MultiIndex case
                 if isinstance(self._index_name, tuple) and len(self._index_name) > 1:
@@ -1490,8 +1905,21 @@ class DataFrame:
                     )
                 else:
                     # Convert empty string to None for pandas compatibility
-                    index_name = self._index_name if self._index_name != "" else None
-                    pandas_df.index.name = index_name
+                    index_name_value: Optional[Union[str, Tuple[str, ...]]]
+                    if isinstance(self._index_name, str):
+                        index_name_value = (
+                            self._index_name if self._index_name != "" else None
+                        )
+                    elif isinstance(self._index_name, tuple):
+                        # For tuple index names, use first element or empty string handling
+                        index_name_value = (
+                            self._index_name if self._index_name != ("",) else None
+                        )
+                    else:
+                        # self._index_name is None here
+                        index_name_value = None  # type: ignore[unreachable]
+                    if hasattr(pandas_df.index, "name"):
+                        pandas_df.index.name = index_name_value
 
         # Convert string column names that look like integers to RangeIndex
         try:
@@ -1501,7 +1929,7 @@ class DataFrame:
                 int_cols = [int(name) for name in col_names]
                 if int_cols == list(range(len(int_cols))):
                     # Convert to RangeIndex
-                    pandas_df.columns = pd.RangeIndex(  # type: ignore[assignment]
+                    pandas_df.columns = pd.RangeIndex(
                         start=0, stop=len(int_cols), step=1
                     )
         except Exception:
@@ -1527,8 +1955,7 @@ class DataFrame:
         --------
         >>> df.to_sql("table", connection)
         """
-        materialized = self._df
-        materialized.write_database(name, con, **kwargs)
+        self._df.write_database(name, con, **kwargs)
 
     def to_feather(self, path: str, **kwargs: Any) -> None:
         """
@@ -1545,8 +1972,7 @@ class DataFrame:
         --------
         >>> df.to_feather("data.feather")
         """
-        materialized = self._df
-        materialized.write_ipc(path, **kwargs)
+        self._df.write_ipc(path, **kwargs)
 
     def sample(
         self, n: Optional[int] = None, frac: Optional[float] = None, **kwargs: Any
@@ -1571,8 +1997,7 @@ class DataFrame:
         if frac is not None:
             n = int(len(self) * frac)
 
-        materialized = self._df
-        return DataFrame(materialized.sample(n=n, **kwargs))
+        return DataFrame(self._df.sample(n=n, **kwargs))
 
     def pivot(
         self,
@@ -1598,8 +2023,7 @@ class DataFrame:
             Pivoted DataFrame
         """
         # Polars uses pivot() but with different parameter names
-        materialized = self._df
-        return DataFrame(materialized.pivot(on=columns, index=index, values=values))  # type: ignore[arg-type]
+        return DataFrame(self._df.pivot(on=columns, index=index, values=values))  # type: ignore[arg-type]
 
     def pivot_table(
         self,
@@ -1662,8 +2086,7 @@ class DataFrame:
         >>> result = df.get_dummies()
         """
         # Use Polars to_dummies() method
-        materialized = self._df
-        return DataFrame(materialized.to_dummies(**kwargs))
+        return DataFrame(self._df.to_dummies(**kwargs))
 
     def rolling(self, window: int, **kwargs: Any) -> "_RollingGroupBy":
         """
@@ -1837,7 +2260,9 @@ class DataFrame:
         sorted_df = self._df.sort(by, **kwargs)
         return DataFrame(sorted_df)
 
-    def apply(self, func: Callable[..., Any], axis: int = 0) -> Union["Series", "DataFrame"]:
+    def apply(
+        self, func: Callable[..., Any], axis: int = 0
+    ) -> Union["Series", "DataFrame"]:
         """
         Apply a function along an axis.
 
@@ -1945,8 +2370,7 @@ class DataFrame:
             The n largest rows
         """
         # Handle empty DataFrame
-        materialized = self._df
-        if materialized.height == 0:
+        if self._df.height == 0:
             raise KeyError(
                 f"Column '{columns[0] if isinstance(columns, str) else columns[0]}' not found"
             )
@@ -1958,11 +2382,8 @@ class DataFrame:
         # Store original indices before sorting
         if self._index is not None:
             # Add row count to track original positions
-            temp_df = materialized.with_row_index("__temp_idx__")
+            temp_df = self._df.with_row_index("__temp_idx__")
             sorted_df = temp_df.sort(by=columns, descending=True).head(n)
-            # Ensure we have a DataFrame, not LazyFrame
-            if hasattr(sorted_df, 'collect'):
-                sorted_df = sorted_df.collect()
 
             # Extract original indices
             original_indices = sorted_df["__temp_idx__"].to_list()
@@ -1974,11 +2395,8 @@ class DataFrame:
             result._index = result_indices
         else:
             # No stored index, but preserve original row positions
-            temp_df = materialized.with_row_index("__temp_idx__")
+            temp_df = self._df.with_row_index("__temp_idx__")
             sorted_df = temp_df.sort(by=columns, descending=True).head(n)
-            # Ensure we have a DataFrame, not LazyFrame
-            if hasattr(sorted_df, 'collect'):
-                sorted_df = sorted_df.collect()
 
             # Extract original row positions
             original_indices = sorted_df["__temp_idx__"].to_list()
@@ -2016,8 +2434,7 @@ class DataFrame:
             The n smallest rows
         """
         # Handle empty DataFrame
-        materialized = self._df
-        if materialized.height == 0:
+        if self._df.height == 0:
             raise KeyError(
                 f"Column '{columns[0] if isinstance(columns, str) else columns[0]}' not found"
             )
@@ -2029,11 +2446,8 @@ class DataFrame:
         # Store original indices before sorting
         if self._index is not None:
             # Add row count to track original positions
-            temp_df = materialized.with_row_index("__temp_idx__")
+            temp_df = self._df.with_row_index("__temp_idx__")
             sorted_df = temp_df.sort(by=columns, descending=False).head(n)
-            # Ensure we have a DataFrame, not LazyFrame
-            if hasattr(sorted_df, 'collect'):
-                sorted_df = sorted_df.collect()
 
             # Extract original indices
             original_indices = sorted_df["__temp_idx__"].to_list()
@@ -2045,11 +2459,8 @@ class DataFrame:
             result._index = result_indices
         else:
             # No stored index, but preserve original row positions
-            temp_df = materialized.with_row_index("__temp_idx__")
+            temp_df = self._df.with_row_index("__temp_idx__")
             sorted_df = temp_df.sort(by=columns, descending=False).head(n)
-            # Ensure we have a DataFrame, not LazyFrame
-            if hasattr(sorted_df, 'collect'):
-                sorted_df = sorted_df.collect()
 
             # Extract original row positions
             original_indices = sorted_df["__temp_idx__"].to_list()
@@ -2138,6 +2549,8 @@ class DataFrame:
             raise NotImplementedError("rank with axis=1 not yet implemented")
 
         # Map pandas methods to Polars methods
+        from typing import Literal, cast
+
         method_map = {
             "average": "average",
             "min": "min",
@@ -2145,7 +2558,14 @@ class DataFrame:
             "first": "ordinal",  # Polars uses 'ordinal' for first occurrence
             "dense": "dense",
         }
-        polars_method = method_map.get(method, method)
+        polars_method_str = method_map.get(method, method)
+        # Cast to Literal type expected by Polars
+        polars_method: Literal[
+            "average", "min", "max", "dense", "ordinal", "random"
+        ] = cast(
+            Literal["average", "min", "max", "dense", "ordinal", "random"],
+            polars_method_str,
+        )
 
         # Apply rank to each column
         result_cols = []
@@ -2155,7 +2575,8 @@ class DataFrame:
                 continue
             else:
                 rank_expr = pl.col(col).rank(
-                    method=polars_method, descending=not ascending  # type: ignore[arg-type]
+                    method=polars_method,
+                    descending=not ascending,
                 )
                 if pct:
                     rank_expr = rank_expr / pl.len()
@@ -2378,8 +2799,8 @@ class _LocIndexer:
 
     def _get_rows(self, row_key: Any) -> Union["Series", "DataFrame"]:
         """Get rows by label."""
-        # Materialize before indexing
-        materialized = self._df
+        # Get the Polars DataFrame from the parent DataFrame
+        polars_df = self._df._df
 
         # Handle boolean indexing with pandas Series
         if hasattr(row_key, "dtype") and str(row_key.dtype) == "bool":
@@ -2388,7 +2809,7 @@ class _LocIndexer:
 
             mask_values = row_key.tolist()
             mask_series = pl.Series("mask", mask_values)
-            selected_df = materialized.filter(mask_series)
+            selected_df = polars_df.filter(mask_series)
             result = DataFrame(selected_df)
             # Preserve index for selected rows
             if self._df._index is not None:
@@ -2429,10 +2850,10 @@ class _LocIndexer:
                     # Single row - return as Series
                     from polarpandas.series import Series
 
-                    return Series(materialized[row_indices[0]])  # type: ignore[arg-type]
+                    return Series(polars_df[row_indices[0]])  # type: ignore[arg-type]
                 else:
                     # Multiple rows - return as DataFrame
-                    selected_df = materialized[row_indices]
+                    selected_df = polars_df[row_indices]
                     result = DataFrame(selected_df)
                     # Preserve index for selected rows
                     result._index = [self._df._index[i] for i in row_indices]
@@ -2443,14 +2864,14 @@ class _LocIndexer:
             # No index - treat as integer position
             if isinstance(row_key, slice):
                 try:
-                    selected_df = materialized[row_key]
+                    selected_df = polars_df[row_key]
                     return DataFrame(selected_df)
                 except IndexError as e:
                     # Convert Polars IndexError to pandas KeyError for compatibility
                     raise KeyError(f"index {row_key} is out of bounds") from e
             elif isinstance(row_key, list):
                 try:
-                    selected_df = materialized[row_key]
+                    selected_df = polars_df[row_key]
                     return DataFrame(selected_df)
                 except IndexError as e:
                     # Convert Polars IndexError to pandas KeyError for compatibility
@@ -2461,7 +2882,7 @@ class _LocIndexer:
 
                 try:
                     # Get single row as Series - use slice to get all columns
-                    row_data = materialized.slice(row_key, 1)
+                    row_data = polars_df.slice(row_key, 1)
                     # Convert to Series by taking the first (and only) row
                     # Create a list of values in column order
                     values = [row_data[col][0] for col in row_data.columns]
@@ -2470,19 +2891,20 @@ class _LocIndexer:
                     # Convert Polars IndexError to pandas KeyError for compatibility
                     raise KeyError(f"index {row_key} is out of bounds") from e
 
-    def _get_rows_cols(self, row_key: Any, col_key: Any) -> Union["Series", "DataFrame", Any]:
+    def _get_rows_cols(
+        self, row_key: Any, col_key: Any
+    ) -> Union["Series", "DataFrame", Any]:
         """Get rows and columns by label."""
-        # Materialize before indexing
-        materialized = self._df
+        # Get the Polars DataFrame from the parent DataFrame
+        polars_df = self._df._df
+        import polars as pl
 
         # Handle boolean indexing with pandas Series
         if hasattr(row_key, "dtype") and str(row_key.dtype) == "bool":
             # Convert pandas Series mask to Polars expression
-            import polars as pl
-
             mask_values = row_key.tolist()
             mask_series = pl.Series("mask", mask_values)
-            selected_df = materialized.filter(mask_series)
+            selected_df = polars_df.filter(mask_series)
 
             # Select columns if specified
             if col_key is not None:
@@ -2533,15 +2955,16 @@ class _LocIndexer:
                 # Select rows and columns
                 if len(row_indices) == 1 and isinstance(col_key, str):
                     # Single cell access - return scalar value directly
-                    return materialized[row_indices[0], col_key]
+                    row_values = polars_df.row(row_indices[0], named=True)
+                    return row_values[col_key]
                 elif len(row_indices) == 1:
                     # Single row, multiple columns - return as Series
                     from polarpandas.series import Series
 
-                    return Series(materialized[row_indices[0], col_key])
+                    return Series(polars_df[row_indices[0], col_key])
                 else:
                     # Multiple rows - return as DataFrame
-                    selected_df = materialized[row_indices, col_key]
+                    selected_df = polars_df[row_indices, col_key]
                     result = DataFrame(selected_df)
                     # Preserve index for selected rows
                     result._index = [self._df._index[i] for i in row_indices]
@@ -2551,52 +2974,66 @@ class _LocIndexer:
         else:
             # No index - treat as integer position
             if isinstance(row_key, slice):
-                selected_df = materialized[row_key, col_key]
+                selected_df = polars_df[row_key, col_key]
                 return DataFrame(selected_df)
             elif isinstance(row_key, list):
-                selected_df = materialized[row_key, col_key]
+                selected_df = polars_df[row_key, col_key]
                 return DataFrame(selected_df)
             else:
                 # Single cell access - return scalar value directly
                 if isinstance(col_key, str):
-                    return materialized[row_key, col_key]
+                    try:
+                        # Use Polars row() method for single row access
+                        row_values = polars_df.row(row_key, named=True)
+                        return row_values[col_key]
+                    except (IndexError, pl.exceptions.OutOfBoundsError) as e:
+                        raise KeyError(f"Key {row_key} or {col_key} not found") from e
                 else:
                     # Single row, multiple columns - return as Series
                     from polarpandas.series import Series
 
-                    return Series(materialized[row_key, col_key])
+                    try:
+                        row_data = polars_df.row(row_key, named=True)
+                        if isinstance(col_key, list):
+                            return Series([row_data[k] for k in col_key])
+                        else:
+                            return Series([row_data[col_key]])
+                    except (IndexError, pl.exceptions.OutOfBoundsError) as e:
+                        raise KeyError(f"Key {row_key} or {col_key} not found") from e
 
     def _set_rows(self, row_key: Any, value: Any) -> None:
         """Set rows by label."""
         # Convert to pandas for label-based indexing
-        materialized = self._df
-        pd_df = materialized.to_pandas()
+        pd_df = self._df.to_pandas()
 
         # Set the index if we have a stored index
         if self._df._index is not None:
-            pd_df.index = self._df._index  # type: ignore[assignment]
+            pd_df.index = self._df._index
 
         pd_df.loc[row_key] = value
-        self._df = pl.from_pandas(pd_df).lazy()
+        self._df._df = pl.from_pandas(pd_df)
         # Preserve the index after assignment
         self._df._index = pd_df.index.tolist()
-        self._df._index_name = pd_df.index.name  # type: ignore[assignment]
+        if hasattr(pd_df.index, "name"):
+            index_name_val = pd_df.index.name
+            self._df._index_name = index_name_val
 
     def _set_rows_cols(self, row_key: Any, col_key: Any, value: Any) -> None:
         """Set rows and columns by label."""
         # Convert to pandas for label-based indexing
-        materialized = self._df
-        pd_df = materialized.to_pandas()
+        pd_df = self._df.to_pandas()
 
         # Set the index if we have a stored index
         if self._df._index is not None:
-            pd_df.index = self._df._index  # type: ignore[assignment]
+            pd_df.index = self._df._index
 
         pd_df.loc[row_key, col_key] = value
-        self._df = pl.from_pandas(pd_df).lazy()
+        self._df._df = pl.from_pandas(pd_df)
         # Preserve the index after assignment
         self._df._index = pd_df.index.tolist()
-        self._df._index_name = pd_df.index.name  # type: ignore[assignment]
+        if hasattr(pd_df.index, "name"):
+            index_name_val = pd_df.index.name
+            self._df._index_name = index_name_val
 
 
 class _ILocIndexer:
@@ -2627,59 +3064,136 @@ class _ILocIndexer:
 
     def _get_rows(self, row_key: Any) -> Union["Series", "DataFrame"]:
         """Get rows by integer position."""
-        # Materialize before indexing
-        materialized = self._df
+        # Get the Polars DataFrame from the parent DataFrame
+        polars_df = self._df._df
+        import polars as pl
 
         # Use Polars for integer-based indexing
         if isinstance(row_key, slice):
-            selected_df = materialized[row_key]
+            selected_df = polars_df[row_key]
             return DataFrame(selected_df)
         elif isinstance(row_key, list):
-            selected_df = materialized[row_key]
+            selected_df = polars_df[row_key]
             return DataFrame(selected_df)
         else:
             # Single row - return as Series
             from polarpandas.series import Series
 
-            return Series(materialized[row_key])
+            try:
+                row_values = polars_df.row(row_key, named=True)
+                return Series(
+                    list(row_values.values())
+                    if isinstance(row_values, dict)
+                    else row_values
+                )
+            except (IndexError, pl.exceptions.OutOfBoundsError) as e:
+                if isinstance(row_key, int):
+                    if row_key < 0:
+                        row_key = len(polars_df) + row_key
+                    if row_key >= len(polars_df) or row_key < 0:
+                        raise IndexError(
+                            f"index {row_key} is out of bounds for axis 0 with size {len(polars_df)}"
+                        ) from e
+                raise IndexError(f"index {row_key} is out of bounds") from e
 
-    def _get_rows_cols(self, row_key: Any, col_key: Any) -> Union["Series", "DataFrame", Any]:
+    def _get_rows_cols(
+        self, row_key: Any, col_key: Any
+    ) -> Union["Series", "DataFrame", Any]:
         """Get rows and columns by integer position."""
-        # Materialize before indexing
-        materialized = self._df
+        # Get the Polars DataFrame from the parent DataFrame
+        polars_df = self._df._df
+        import polars as pl
 
         # Use Polars for integer-based indexing
         if isinstance(row_key, slice):
-            selected_df = materialized[row_key, col_key]
+            selected_df = polars_df[row_key, col_key]
             return DataFrame(selected_df)
         elif isinstance(row_key, list):
-            selected_df = materialized[row_key, col_key]
+            selected_df = polars_df[row_key, col_key]
             return DataFrame(selected_df)
         else:
             # Single cell access - return scalar value directly
             if isinstance(col_key, (int, str)):
-                return materialized[row_key, col_key]
+                try:
+                    # Use Polars row() method for single row access
+                    row_values = polars_df.row(row_key, named=True)
+                    if isinstance(col_key, int):
+                        # Get column by integer position
+                        col_name = polars_df.columns[col_key]
+                        return row_values[col_name]
+                    else:
+                        # Get column by name
+                        return row_values[col_key]
+                except (IndexError, pl.exceptions.OutOfBoundsError) as e:
+                    if isinstance(row_key, int):
+                        if row_key < 0:
+                            row_key = len(polars_df) + row_key
+                        if row_key >= len(polars_df) or row_key < 0:
+                            raise IndexError(
+                                f"index {row_key} is out of bounds for axis 0 with size {len(polars_df)}"
+                            ) from e
+                    raise IndexError(
+                        f"index {row_key} or {col_key} is out of bounds"
+                    ) from e
+                except KeyError as e:
+                    raise KeyError(f"Column {col_key} not found") from e
             else:
                 # Single row, multiple columns - return as Series
                 from polarpandas.series import Series
 
-                return Series(materialized[row_key, col_key])
+                try:
+                    row_data = polars_df.row(row_key, named=True)
+                    if isinstance(col_key, list):
+                        return Series([row_data[k] for k in col_key])
+                    else:
+                        col_name = (
+                            polars_df.columns[col_key]
+                            if isinstance(col_key, int)
+                            else col_key
+                        )
+                        value = (
+                            row_data[col_name]
+                            if isinstance(row_data, dict)
+                            else row_data
+                        )
+                        return Series(
+                            [value]
+                            if not isinstance(value, (list, pl.Series))
+                            else value
+                        )
+                except (IndexError, pl.exceptions.OutOfBoundsError) as e:
+                    if isinstance(row_key, int):
+                        if row_key < 0:
+                            row_key = len(polars_df) + row_key
+                        if row_key >= len(polars_df) or row_key < 0:
+                            raise IndexError(
+                                f"index {row_key} is out of bounds for axis 0 with size {len(polars_df)}"
+                            ) from e
+                    raise IndexError(
+                        f"index {row_key} or {col_key} is out of bounds"
+                    ) from e
 
     def _set_rows(self, row_key: Any, value: Any) -> None:
         """Set rows by integer position."""
         # Convert to pandas for integer-based indexing
-        materialized = self._df
-        pd_df = materialized.to_pandas()
+        pd_df = self._df.to_pandas()
         pd_df.iloc[row_key] = value
-        self._df = pl.from_pandas(pd_df).lazy()
+        self._df._df = pl.from_pandas(pd_df)
+        # Preserve index after assignment
+        self._df._index = pd_df.index.tolist()
+        if hasattr(pd_df.index, "name"):
+            self._df._index_name = pd_df.index.name
 
     def _set_rows_cols(self, row_key: Any, col_key: Any, value: Any) -> None:
         """Set rows and columns by integer position."""
         # Convert to pandas for integer-based indexing
-        materialized = self._df
-        pd_df = materialized.to_pandas()
+        pd_df = self._df.to_pandas()
         pd_df.iloc[row_key, col_key] = value
-        self._df = pl.from_pandas(pd_df).lazy()
+        self._df._df = pl.from_pandas(pd_df)
+        # Preserve index after assignment
+        self._df._index = pd_df.index.tolist()
+        if hasattr(pd_df.index, "name"):
+            self._df._index_name = pd_df.index.name
 
 
 class _AtIndexer:
@@ -2692,21 +3206,23 @@ class _AtIndexer:
         """Get single value by label."""
         if isinstance(key, tuple) and len(key) == 2:
             row_key, col_key = key
-            # Materialize before indexing
-            materialized = self._df
+            # Get the Polars DataFrame from the parent DataFrame
+            polars_df = self._df._df
 
             # Use Polars for label-based indexing - limited support
             if self._df._index is not None:
                 # Find row index
                 try:
                     row_idx = self._df._index.index(row_key)
-                    return materialized[row_idx, col_key]
+                    row_values = polars_df.row(row_idx, named=True)
+                    return row_values[col_key]
                 except ValueError as e:
                     raise KeyError(f"'{row_key}' not in index") from e
             else:
                 # No index - use integer position
                 if isinstance(row_key, int):
-                    return materialized[row_key, col_key]
+                    row_values = polars_df.row(row_key, named=True)
+                    return row_values[col_key]
                 else:
                     raise KeyError(f"'{row_key}' not in index")
         else:
@@ -2757,8 +3273,7 @@ class _IAtIndexer:
         if isinstance(key, tuple) and len(key) == 2:
             row_key, col_key = key
             # Convert to pandas for integer-based indexing
-            materialized = self._df
-            pd_df = materialized.to_pandas()
+            pd_df = self._df.to_pandas()
             return pd_df.iat[row_key, col_key]
         else:
             raise ValueError("iat accessor requires (row, col) tuple")
@@ -2768,10 +3283,13 @@ class _IAtIndexer:
         if isinstance(key, tuple) and len(key) == 2:
             row_key, col_key = key
             # Convert to pandas for integer-based indexing
-            materialized = self._df
-            pd_df = materialized.to_pandas()
+            pd_df = self._df.to_pandas()
             pd_df.iat[row_key, col_key] = value
-            self._df = pl.from_pandas(pd_df).lazy()
+            self._df._df = pl.from_pandas(pd_df)
+            # Preserve index after assignment
+            self._df._index = pd_df.index.tolist()
+            if hasattr(pd_df.index, "name"):
+                self._df._index_name = pd_df.index.name
         else:
             raise ValueError("iat accessor requires (row, col) tuple")
 
@@ -2787,57 +3305,57 @@ class _RollingGroupBy:
     def mean(self) -> "DataFrame":
         """Calculate rolling mean."""
         result_cols = []
-        materialized = self._df
+        polars_df = self._df._df
         for col in self._df.columns:
             result_cols.append(
-                materialized[col].rolling_mean(window_size=self._window).alias(col)
+                polars_df[col].rolling_mean(window_size=self._window).alias(col)
             )
-        result_df = materialized.select(result_cols)
-        return DataFrame(result_df._df)
+        result_df = polars_df.select(result_cols)
+        return DataFrame(result_df)
 
     def sum(self) -> "DataFrame":
         """Calculate rolling sum."""
         result_cols = []
-        materialized = self._df
+        polars_df = self._df._df
         for col in self._df.columns:
             result_cols.append(
-                materialized[col].rolling_sum(window_size=self._window).alias(col)
+                polars_df[col].rolling_sum(window_size=self._window).alias(col)
             )
-        result_df = materialized.select(result_cols)
-        return DataFrame(result_df._df)
+        result_df = polars_df.select(result_cols)
+        return DataFrame(result_df)
 
     def std(self) -> "DataFrame":
         """Calculate rolling standard deviation."""
         result_cols = []
-        materialized = self._df
+        polars_df = self._df._df
         for col in self._df.columns:
             result_cols.append(
-                materialized[col].rolling_std(window_size=self._window).alias(col)
+                polars_df[col].rolling_std(window_size=self._window).alias(col)
             )
-        result_df = materialized.select(result_cols)
-        return DataFrame(result_df._df)
+        result_df = polars_df.select(result_cols)
+        return DataFrame(result_df)
 
     def max(self) -> "DataFrame":
         """Calculate rolling maximum."""
         result_cols = []
-        materialized = self._df
+        polars_df = self._df._df
         for col in self._df.columns:
             result_cols.append(
-                materialized[col].rolling_max(window_size=self._window).alias(col)
+                polars_df[col].rolling_max(window_size=self._window).alias(col)
             )
-        result_df = materialized.select(result_cols)
-        return DataFrame(result_df._df)
+        result_df = polars_df.select(result_cols)
+        return DataFrame(result_df)
 
     def min(self) -> "DataFrame":
         """Calculate rolling minimum."""
         result_cols = []
-        materialized = self._df
+        polars_df = self._df._df
         for col in self._df.columns:
             result_cols.append(
-                materialized[col].rolling_min(window_size=self._window).alias(col)
+                polars_df[col].rolling_min(window_size=self._window).alias(col)
             )
-        result_df = materialized.select(result_cols)
-        return DataFrame(result_df._df)
+        result_df = polars_df.select(result_cols)
+        return DataFrame(result_df)
 
 
 class _GroupBy:

@@ -1,5 +1,25 @@
 """
 Index implementation wrapping Polars Series with pandas-like API.
+
+This module provides the Index class that wraps a Polars Series to represent
+DataFrame indices. It provides a pandas-compatible interface for index operations
+while using Polars for the underlying data storage.
+
+Classes
+-------
+Index : Index object for DataFrame index management
+
+Examples
+--------
+>>> import polarpandas as ppd
+>>> idx = ppd.Index([1, 2, 3, 4, 5])
+>>> # Use as DataFrame index
+>>> df = ppd.DataFrame({"A": [10, 20, 30]}, index=idx)
+
+Notes
+-----
+- Index is stored separately from DataFrame data in Polars
+- Index operations may be slower than column operations
 """
 
 from typing import Any, Iterator, List, Optional, Tuple, Union
@@ -9,9 +29,43 @@ import polars as pl
 
 class Index:
     """
-    An Index wrapper around Polars Series with pandas-like API.
+    Immutable sequence used for indexing and alignment.
 
-    This class wraps a Polars Series to represent DataFrame indices.
+    Index is the basic object for storing axis labels (row labels) for
+    DataFrames in PolarPandas. It wraps a Polars Series and provides a
+    pandas-compatible interface for index operations.
+
+    Parameters
+    ----------
+    data : array-like, pl.Series, or None, optional
+        Input data. Can be:
+        - List or array-like of values
+        - Existing Polars Series
+        - None for empty Index
+
+    Attributes
+    ----------
+    _series : pl.Series
+        The underlying Polars Series storing the index values.
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> # Create Index from list
+    >>> idx = ppd.Index([1, 2, 3, 4, 5])
+    >>> # Use with DataFrame
+    >>> df = ppd.DataFrame({"A": [10, 20, 30]}, index=idx)
+
+    See Also
+    --------
+    DataFrame : Two-dimensional data structure with Index support
+    Series : One-dimensional data structure
+
+    Notes
+    -----
+    - Index values are stored in a Polars Series
+    - Index is immutable (cannot be modified after creation)
+    - Index operations delegate to underlying Polars Series
     """
 
     def __init__(

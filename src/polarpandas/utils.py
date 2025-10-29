@@ -1,7 +1,23 @@
 """
 Utility functions for PolarPandas.
 
-Provides pandas-compatible utility functions.
+This module provides pandas-compatible utility functions for common data
+analysis tasks, including null value detection and data binning.
+
+Functions
+---------
+isna : Detect missing values in DataFrame or Series
+notna : Detect non-missing values in DataFrame or Series
+cut : Bin values into discrete intervals
+
+Examples
+--------
+>>> import polarpandas as ppd
+>>> df = ppd.DataFrame({"A": [1, None, 3]})
+>>> # Check for missing values
+>>> missing = ppd.isna(df)
+>>> # Bin values
+>>> bins = ppd.cut([1, 2, 3, 4, 5], bins=3)
 """
 
 from typing import Any, List, Optional

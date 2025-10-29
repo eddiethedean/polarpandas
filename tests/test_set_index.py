@@ -155,7 +155,9 @@ class TestSetIndex:
 
         # Original should be unchanged
         pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())
+        pd.testing.assert_frame_equal(
+            original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas()
+        )
 
     @pytest.mark.skip(
         reason="Polars has limited support for null values in index - permanent limitation"
@@ -233,3 +235,40 @@ class TestSetIndex:
             pd.DataFrame(self.data).set_index(None)
         with pytest.raises(KeyError):
             ppd.DataFrame(self.data).set_index(None)
+
+    def test_set_index_inplace_false_append_multilevel(self):
+        """Test set_index with inplace=False and append=True creates multilevel index."""
+        # Lines 1255-1257: inplace=False, append=True with multiple columns
+        df = ppd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+        df_indexed = df.set_index("a")
+
+        result = df_indexed.set_index(["b", "c"], append=True, inplace=False)
+        assert isinstance(result, ppd.DataFrame)
+        assert result._index is not None
+        # Should be list of tuples
+        assert all(isinstance(idx, tuple) for idx in result._index)
+        assert len(result._index[0]) == 3  # (a, b, c)
+
+    def test_set_index_inplace_false_replace_index(self):
+        """Test set_index with inplace=False replaces index."""
+        # Lines 1283: inplace=False, replace with multiple columns
+        df = ppd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+
+        result = df.set_index(["b", "c"], inplace=False)
+        assert isinstance(result, ppd.DataFrame)
+        assert result._index is not None
+        # Should be list of tuples
+        assert all(isinstance(idx, tuple) for idx in result._index)
+        assert len(result._index[0]) == 2  # (b, c)
+
+    def test_set_index_result_independence(self):
+        """Test that result DataFrame is independent when inplace=False."""
+        df = ppd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+        result = df.set_index("a", inplace=False)
+        # Modify result
+        result["c"] = [7, 8, 9]
+
+        # Original should be unchanged
+        assert "c" not in df.columns
+        assert "c" in result.columns

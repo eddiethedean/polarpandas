@@ -282,7 +282,9 @@ class TestCSVIOComprehensive:
 
         # Original should be unchanged
         pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())
+        pd.testing.assert_frame_equal(
+            original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas()
+        )
 
 
 class TestJSONIOComprehensive:
@@ -594,6 +596,71 @@ class TestJSONIOComprehensive:
 
             os.unlink(f.name)
 
+    def test_read_excel_file_not_found(self):
+        """Test read_excel raises NotImplementedError."""
+        import pytest
+
+        # Excel reading is not implemented
+        with pytest.raises(NotImplementedError, match="read_excel not yet implemented"):
+            ppd.read_excel("nonexistent.xlsx")
+
+    def test_read_parquet_basic(self):
+        """Test read_parquet function."""
+        # Create a parquet file first
+        df = ppd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
+            temp_path = f.name
+
+        try:
+            df.to_parquet(temp_path)
+
+            # Test module-level read_parquet
+            result = ppd.read_parquet(temp_path)
+            assert isinstance(result, ppd.DataFrame)
+            assert len(result) == 3
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_read_parquet_invalid_file(self):
+        """Test read_parquet with invalid file raises error."""
+        import pytest
+
+        # File doesn't exist
+        with pytest.raises(
+            (FileNotFoundError, OSError, Exception)
+        ):  # Polars will raise an error
+            ppd.read_parquet("nonexistent_file.parquet")
+
+    def test_read_feather_basic(self):
+        """Test read_feather function."""
+        # Create a feather file first
+        df = ppd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        with tempfile.NamedTemporaryFile(suffix=".feather", delete=False) as f:
+            temp_path = f.name
+
+        try:
+            df.to_feather(temp_path)
+
+            # Test module-level read_feather
+            result = ppd.read_feather(temp_path)
+            assert isinstance(result, ppd.DataFrame)
+            assert len(result) == 3
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_read_sql_mock(self):
+        """Test read_sql with a mock that will error."""
+        import pytest
+
+        # read_sql requires actual database connection, test that it calls the method
+        # Since we can't easily mock a database connection, we'll test with an invalid one
+        with pytest.raises(
+            (AttributeError, TypeError, ValueError)
+        ):  # Will raise connection or attribute error
+            ppd.read_sql("SELECT * FROM table", None)
+
     def test_json_io_methods_return_types(self):
         """Test that JSON I/O methods return correct types."""
         # Test read_json
@@ -616,4 +683,6 @@ class TestJSONIOComprehensive:
 
         # Original should be unchanged
         pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())
+        pd.testing.assert_frame_equal(
+            original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas()
+        )

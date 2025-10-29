@@ -1,7 +1,26 @@
 """
 Datetime utilities for PolarPandas.
 
-Provides pandas-compatible datetime functions.
+This module provides pandas-compatible functions for working with datetime
+data, including date range generation and datetime conversion.
+
+Functions
+---------
+date_range : Generate sequences of dates
+to_datetime : Convert argument to datetime
+
+Examples
+--------
+>>> import polarpandas as ppd
+>>> # Generate date range
+>>> dates = ppd.date_range("2021-01-01", periods=5)
+>>> # Convert to datetime
+>>> dt = ppd.to_datetime(["2021-01-01", "2021-01-02"])
+
+Notes
+-----
+- Datetime operations may have limitations compared to pandas
+- Some datetime formats may not be fully supported
 """
 
 from typing import Any, Optional

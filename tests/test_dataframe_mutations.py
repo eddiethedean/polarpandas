@@ -61,7 +61,9 @@ class TestDataFrameDelItem:
     def test_delitem_nonexistent_column_raises(self):
         """Test that deleting a nonexistent column raises an error."""
         df = DataFrame({"a": [1, 2, 3]})
-        with pytest.raises(pl.exceptions.ColumnNotFoundError):  # Polars will raise an error
+        with pytest.raises(
+            pl.exceptions.ColumnNotFoundError
+        ):  # Polars will raise an error
             del df["nonexistent"]
 
 

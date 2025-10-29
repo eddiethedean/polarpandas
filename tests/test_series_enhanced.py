@@ -98,6 +98,92 @@ class TestSeriesMethods:
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
+    def test_series_between_inclusive_both(self):
+        """Test between with inclusive='both'."""
+        # Lines 321-322: inclusive == "both"
+        pd_result = pd.Series(self.data).between(2, 4, inclusive="both")
+        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="both")
+        pd.testing.assert_series_equal(
+            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
+        )
+
+    def test_series_between_inclusive_neither(self):
+        """Test between with inclusive='neither'."""
+        # Lines 323-324: inclusive == "neither"
+        pd_result = pd.Series(self.data).between(2, 4, inclusive="neither")
+        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="neither")
+        pd.testing.assert_series_equal(
+            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
+        )
+
+    def test_series_between_inclusive_left(self):
+        """Test between with inclusive='left'."""
+        # Lines 325-326: inclusive == "left"
+        pd_result = pd.Series(self.data).between(2, 4, inclusive="left")
+        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="left")
+        pd.testing.assert_series_equal(
+            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
+        )
+
+    def test_series_between_inclusive_right(self):
+        """Test between with inclusive='right'."""
+        # Lines 327-328: inclusive == "right"
+        pd_result = pd.Series(self.data).between(2, 4, inclusive="right")
+        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="right")
+        pd.testing.assert_series_equal(
+            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
+        )
+
+    def test_series_between_invalid_inclusive_raises_error(self):
+        """Test between raises error for invalid inclusive parameter."""
+        # Lines 329-332: ValueError for invalid inclusive
+        s = ppd.Series(self.data)
+        with pytest.raises(ValueError, match="inclusive must be one of"):
+            s.between(2, 4, inclusive="invalid")
+
+    def test_series_between_empty_series(self):
+        """Test between with empty Series."""
+        # Lines 316-317: Empty series handling
+        import numpy as np
+
+        pd_empty = pd.Series([], dtype=np.float64)
+        ppd_empty = ppd.Series([], dtype=float)
+
+        pd_result = pd_empty.between(2, 4)
+        ppd_result = ppd_empty.between(2, 4)
+        pd.testing.assert_series_equal(
+            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
+        )
+
+    def test_series_arithmetic_with_nulls(self):
+        """Test arithmetic operations with null values."""
+        # Lines 133-135: Arithmetic with nulls
+        s = ppd.Series([1, None, 3, None, 5])
+
+        # Addition
+        result = s + 10
+        assert isinstance(result, ppd.Series)
+
+        # Multiplication
+        result = s * 2
+        assert isinstance(result, ppd.Series)
+
+        # Division
+        result = s / 2
+        assert isinstance(result, ppd.Series)
+
+    def test_series_comparison_with_nulls(self):
+        """Test comparison operations with null values."""
+        s = ppd.Series([1, None, 3, None, 5])
+
+        # Greater than
+        result = s > 2
+        assert isinstance(result, ppd.Series)
+
+        # Equal
+        result = s == 3
+        assert isinstance(result, ppd.Series)
+
     def test_between_inclusive(self):
         """Test between with different inclusive options."""
         # Test 'neither'

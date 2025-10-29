@@ -74,7 +74,10 @@ for size in sizes:
     ppd_df = ppd.DataFrame(data)
 
     result = benchmark_operation(
-        "Column Selection", size, lambda: pd_df["a"], lambda: ppd_df["a"]
+        "Column Selection",
+        size,
+        lambda pd_df=pd_df: pd_df["a"],  # noqa: B023
+        lambda ppd_df=ppd_df: ppd_df["a"],  # noqa: B023
     )
     results.append(result)
     print(
@@ -89,8 +92,14 @@ for size in sizes:
     result = benchmark_operation(
         "Column Assignment",
         size,
-        lambda: (pd_df.copy().__setitem__("c", pd_df["a"] + pd_df["b"]), None)[1],
-        lambda: (ppd_df.copy().__setitem__("c", ppd_df["a"] + ppd_df["b"]), None)[1],
+        lambda pd_df=pd_df: (
+            pd_df.copy().__setitem__("c", pd_df["a"] + pd_df["b"]),
+            None,
+        )[1],  # noqa: B023
+        lambda ppd_df=ppd_df: (
+            ppd_df.copy().__setitem__("c", ppd_df["a"] + ppd_df["b"]),
+            None,
+        )[1],  # noqa: B023
     )
     results.append(result)
     print(
@@ -106,8 +115,10 @@ for size in sizes:
     result = benchmark_operation(
         "Filtering",
         size,
-        lambda: pd_df[pd_df["a"] > threshold],
-        lambda: ppd_df.filter(ppd_df["a"] > threshold),
+        lambda pd_df=pd_df, threshold=threshold: pd_df[pd_df["a"] > threshold],  # noqa: B023
+        lambda ppd_df=ppd_df, threshold=threshold: ppd_df.filter(
+            ppd_df["a"] > threshold
+        ),  # noqa: B023
     )
     results.append(result)
     print(
@@ -122,8 +133,8 @@ for size in sizes:
     result = benchmark_operation(
         "Aggregation (mean)",
         size,
-        lambda: pd_df["a"].mean(),
-        lambda: ppd_df["a"].mean(),
+        lambda pd_df=pd_df: pd_df["a"].mean(),  # noqa: B023
+        lambda ppd_df=ppd_df: ppd_df["a"].mean(),  # noqa: B023
     )
     results.append(result)
     print(
@@ -144,8 +155,8 @@ for size in sizes:
         result = benchmark_operation(
             "Sorting",
             size,
-            lambda: pd_df_shuffle.sort_values("a"),
-            lambda: ppd_df_shuffle.sort_values("a"),
+            lambda pd_df_shuffle=pd_df_shuffle: pd_df_shuffle.sort_values("a"),  # noqa: B023
+            lambda ppd_df_shuffle=ppd_df_shuffle: ppd_df_shuffle.sort_values("a"),  # noqa: B023
         )
         results.append(result)
         print(
@@ -166,8 +177,10 @@ for size in sizes:
         result = benchmark_operation(
             "GroupBy",
             size,
-            lambda: pd_df_gb.groupby("group")["value"].mean(),
-            lambda: ppd_df_gb.groupby("group").agg(ppd_df_gb["value"].mean()),
+            lambda pd_df_gb=pd_df_gb: pd_df_gb.groupby("group")["value"].mean(),  # noqa: B023
+            lambda ppd_df_gb=ppd_df_gb: ppd_df_gb.groupby("group").agg(
+                ppd_df_gb["value"].mean()
+            ),  # noqa: B023
             iterations=3,
         )
         results.append(result)

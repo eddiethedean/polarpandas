@@ -218,4 +218,6 @@ class TestDataFrameStatistical:
 
         # Original should be unchanged
         pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())
+        pd.testing.assert_frame_equal(
+            original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas()
+        )

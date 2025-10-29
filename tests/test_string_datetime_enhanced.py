@@ -46,11 +46,6 @@ class TestStringAccessorEnhanced:
 
     def test_extract_basic(self):
         """Test extract method."""
-        # Create data with patterns
-        data = ["hello123", "test456", "world789"]
-        pd_series = pd.Series(data)
-        ppd_series = ppd.Series(data)
-
         pd_result = pd.Series(self.data).str.extract(r"(\d+)")
         ppd_result = ppd.Series(self.data).str.extract(r"(\d+)")
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
@@ -97,10 +92,6 @@ class TestStringAccessorEnhanced:
 
     def test_string_methods_with_nulls(self):
         """Test string methods with null values."""
-        data = ["hello", None, "world", ""]
-        pd_series = pd.Series(data)
-        ppd_series = ppd.Series(data)
-
         # Test contains with nulls
         pd_result = pd.Series(self.data).str.contains("o")
         ppd_result = ppd.Series(self.data).str.contains("o")
@@ -251,14 +242,6 @@ class TestDatetimeAccessorEnhanced:
 
     def test_datetime_methods_with_nulls(self):
         """Test datetime methods with null values."""
-        data = [
-            datetime(2023, 1, 15, 10, 30, 45),
-            None,
-            datetime(2023, 12, 31, 23, 59, 59),
-        ]
-        pd_series = pd.Series(data)
-        ppd_series = ppd.Series(data)
-
         # Test year with nulls
         pd_result = pd.Series(self.data).dt.year
         ppd_result = ppd.Series(self.data).dt.year

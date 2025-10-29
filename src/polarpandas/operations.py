@@ -1,7 +1,24 @@
 """
 Data manipulation operations for PolarPandas.
 
-Provides pandas-compatible functions for data manipulation and transformation.
+This module provides pandas-compatible functions for data manipulation and
+transformation, including concatenation, merging, pivoting, and dummy variable
+creation. These functions operate on DataFrame and Series objects and return
+new objects with the transformed data.
+
+Functions
+---------
+concat : Concatenate DataFrames along specified axis
+merge : Merge (join) two DataFrames
+get_dummies : Convert categorical variables to dummy/indicator variables
+pivot_table : Create pivot tables from DataFrames
+
+Examples
+--------
+>>> import polarpandas as ppd
+>>> df1 = ppd.DataFrame({"A": [1, 2]})
+>>> df2 = ppd.DataFrame({"A": [3, 4]})
+>>> result = ppd.concat([df1, df2])
 """
 
 from typing import Any, List

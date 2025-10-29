@@ -23,10 +23,57 @@ if TYPE_CHECKING:
 
 class Series:
     """
-    A mutable Series wrapper around Polars Series with pandas-like API.
+    One-dimensional labeled array capable of holding any data type.
 
-    This class wraps a Polars Series and provides a pandas-compatible interface
-    with in-place mutation support.
+    Series is the one-dimensional data structure in PolarPandas, providing a
+    pandas-like API while using Polars Series for all operations under the hood.
+    It represents a single column of data with an optional index.
+
+    Parameters
+    ----------
+    data : array-like, pl.Series, or None, optional
+        Input data. Can be:
+        - List or array-like of values
+        - Existing Polars Series
+        - None for empty Series
+    name : str, optional
+        Name for the Series. Used to identify the Series and appears in
+        DataFrame columns when Series is extracted from DataFrame.
+    index : array-like, optional
+        Index to use for the Series. Stored separately for pandas compatibility.
+    **kwargs
+        Additional keyword arguments passed to Polars Series constructor.
+
+    Attributes
+    ----------
+    _series : pl.Series
+        The underlying Polars Series.
+    _index : list or None
+        Stored index values for pandas compatibility.
+    _index_name : str or None
+        Name for the index.
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> # From list
+    >>> s = ppd.Series([1, 2, 3, 4, 5])
+    >>> # With name
+    >>> s = ppd.Series([1, 2, 3], name="values")
+    >>> # From Polars Series
+    >>> import polars as pl
+    >>> s = ppd.Series(pl.Series([10, 20, 30]))
+
+    See Also
+    --------
+    DataFrame : Two-dimensional labeled data structure
+    Index : Index object for DataFrame
+
+    Notes
+    -----
+    - Series operations are always eager (executed immediately)
+    - Index is stored separately and not part of Polars Series structure
+    - Most operations return new Series; original is unchanged
     """
 
     def __init__(
@@ -40,14 +87,43 @@ class Series:
         """
         Initialize a Series from various data sources.
 
+        Create a new Series instance from the provided data. The data can be
+        provided as a list, array, or existing Polars Series.
+
         Parameters
         ----------
-        data : list, pl.Series, or None
-            Data to initialize the Series with
+        data : array-like, pl.Series, or None, optional
+            Data to initialize the Series with:
+            - List or array-like: Creates Series from values
+            - Polars Series: Uses the Series directly
+            - None: Creates empty Series
         name : str, optional
-            Name for the Series
+            Name for the Series. Used to identify the Series when it appears
+            as a column in a DataFrame.
         index : array-like, optional
-            Index for the Series
+            Index to use for the Series. Must have same length as data if provided.
+            Stored separately for pandas compatibility.
+        *args
+            Additional positional arguments passed to Polars Series constructor.
+        **kwargs
+            Additional keyword arguments passed to Polars Series constructor.
+
+        Examples
+        --------
+        >>> import polarpandas as ppd
+        >>> # From list
+        >>> s = ppd.Series([1, 2, 3, 4, 5])
+        >>> # With name
+        >>> s = ppd.Series([10, 20, 30], name="values")
+        >>> # Empty Series
+        >>> s = ppd.Series()
+        >>> # With index
+        >>> s = ppd.Series([1, 2, 3], index=["a", "b", "c"])
+
+        Notes
+        -----
+        - Index is stored separately and not part of Polars Series structure
+        - Empty Series can be created by passing None or empty list
         """
         # Store index information
         self._index = index

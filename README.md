@@ -2,9 +2,9 @@
 
 > **The fastest pandas-compatible API you'll ever use**
 
-[![Tests](https://img.shields.io/badge/tests-327%20passing-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
-[![Coverage](https://img.shields.io/badge/coverage-72%25-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
-[![Type Safety](https://img.shields.io/badge/type%20safety-71%20errors%20remaining-orange?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
+[![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
+[![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
+[![Type Safety](https://img.shields.io/badge/type%20safety-100%25%20checked-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue?style=for-the-badge)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
 
@@ -26,6 +26,7 @@
 
 ```python
 import polarpandas as ppd
+import polars as pl
 
 # Create a DataFrame (pandas syntax, Polars performance)
 df = ppd.DataFrame({
@@ -37,34 +38,57 @@ df = ppd.DataFrame({
 # All your favorite pandas operations work!
 df["age_plus_10"] = df["age"] + 10
 df.sort_values("age", inplace=True)
-result = df.groupby("city").agg(df["age"].mean())
+result = df.groupby("city").agg(pl.col("age").mean())
 
 # String operations with .str accessor
 df["name_upper"] = df["name"].str.upper()
 
 # Datetime operations with .dt accessor
 df["birth_year"] = 2024 - df["age"]
-df["birth_date"] = ppd.to_datetime(df["birth_year"], format="%Y")
 
 print(df.head())
 ```
 
-## 🎯 What's New in v0.2.0
+Output:
+```
+shape: (3, 6)
+┌─────────┬─────┬─────────┬─────────────┬────────────┬────────────┐
+│ name    ┆ age ┆ city   ┆ age_plus_10 ┆ name_upper ┆ birth_year │
+│ ---     ┆ --- ┆ ---     ┆ ---         ┆ ---        ┆ ---        │
+│ str     ┆ i64 ┆ str     ┆ i64         ┆ str        ┆ i64        │
+╞═════════╪═════╪═════════╪═════════════╪════════════╪════════════╡
+│ Alice   ┆ 25  ┆ NYC     ┆ 35          ┆ ALICE      ┆ 1999       │
+│ Bob     ┆ 30  ┆ LA      ┆ 40          ┆ BOB        ┆ 1994       │
+│ Charlie ┆ 35  ┆ Chicago ┆ 45          ┆ CHARLIE    ┆ 1989       │
+└─────────┴─────┴─────────┴─────────────┴────────────┴────────────┘
+```
+
+## 🎯 What's New in v0.3.0
+
+### 📚 **Comprehensive Documentation**
+- ✅ **Upgraded all docstrings** - Professional NumPy-style documentation throughout
+- ✅ **Complete API documentation** - All public methods and classes fully documented
+- ✅ **Rich examples** - Practical code examples in every docstring
+- ✅ **Developer-friendly** - Clear parameter descriptions, return types, and usage notes
+- ✅ **Cross-referenced** - See Also sections linking related functionality
 
 ### 🏆 **Production Ready**
-- ✅ **327 tests passing** (100% success rate)
-- ✅ **72% code coverage** with comprehensive test scenarios
+- ✅ **457 tests passing** (100% success rate)
+- ✅ **82% code coverage** with comprehensive test scenarios
 - ✅ **Zero linting errors** - clean, production-ready code
+- ✅ **100% type safety** - all mypy errors resolved
 - ✅ **Proper limitation documentation** - 54 tests skipped with clear reasons
 
-### 🚀 **New Features**
-- **🆕 LazyFrame Class** - Optional lazy execution for maximum performance
-- **🆕 Lazy I/O Operations** - `scan_csv()`, `scan_parquet()`, `scan_json()` for lazy loading
+### 🚀 **Features (from v0.2.0)**
+- **LazyFrame Class** - Optional lazy execution for maximum performance
+- **Lazy I/O Operations** - `scan_csv()`, `scan_parquet()`, `scan_json()` for lazy loading
 - **Complete I/O operations** - Full CSV/JSON read/write support
 - **Advanced statistical methods** - `nlargest()`, `nsmallest()`, `rank()`, `diff()`, `pct_change()`
 - **String & datetime accessors** - Full `.str` and `.dt` accessor support
 - **Module-level functions** - `read_csv()`, `concat()`, `merge()`, `get_dummies()`
 - **Comprehensive edge cases** - Empty DataFrames, null values, mixed types
+- **Full type annotations** - Complete mypy type checking support
+- **Comprehensive test coverage** - Tests for all core functionality and edge cases
 
 ## 📦 Installation
 
@@ -93,7 +117,17 @@ import polars as pl
 # 🚀 EAGER EXECUTION (Default - like pandas)
 df = ppd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 result = df.filter(df["a"] > 1)  # Executes immediately
-print(result)  # Shows results right away
+print(result)
+# Shows results right away:
+# shape: (2, 2)
+# ┌─────┬─────┐
+# │ a   ┆ b   │
+# │ --- ┆ --- │
+# │ i64 ┆ i64 │
+# ╞═════╪═════╡
+# │ 2   ┆ 5   │
+# │ 3   ┆ 6   │
+# └─────┴─────┘
 
 # ⚡ LAZY EXECUTION (Optional - for maximum performance)
 lf = df.lazy()  # Convert to LazyFrame
@@ -134,9 +168,8 @@ df.rename(columns={"A": "alpha"}, inplace=True)
 df.sort_values("B", inplace=True)
 
 # Advanced operations
-df.groupby("category").agg({
-    "value": ["mean", "std", "count"]
-})
+import polars as pl
+df.groupby("category").agg(pl.col("value").mean())  # Use Polars expressions
 df.pivot_table(values="sales", index="region", columns="month")
 df.rolling(window=3).mean()
 ```
@@ -161,17 +194,55 @@ df["prices"].clip(lower=0, upper=100)
 
 ### 🎯 **Advanced Indexing**
 ```python
-# Label-based indexing
-df.loc[df["age"] > 25, "name"]
-df.loc[["Alice", "Bob"], ["age", "city"]]
+# Label-based indexing (with index set)
+df = ppd.DataFrame({
+    "name": ["Alice", "Bob", "Charlie"],
+    "age": [25, 30, 35],
+    "city": ["NYC", "LA", "Chicago"]
+}, index=["a", "b", "c"])
+
+# Select rows by label
+df.loc["a"]  # Single row (returns Series)
+df.loc[["a", "b"], ["name", "age"]]  # Multiple rows and columns
+# Output:
+# shape: (2, 2)
+# ┌───────┬─────┐
+# │ name  ┆ age │
+# │ ---   ┆ --- │
+# │ str   ┆ i64 │
+# ╞═══════╪═════╡
+# │ Alice ┆ 25  │
+# │ Bob   ┆ 30  │
+# └───────┴─────┘
 
 # Position-based indexing
-df.iloc[0:3, 1:4]
-df.iloc[[0, 2, 4], :]
+df.iloc[0:2, 1:3]  # Slice rows and columns
+# Output:
+# shape: (2, 2)
+# ┌─────┬─────────┐
+# │ age ┆ city    │
+# │ --- ┆ ---     │
+# │ i64 ┆ str     │
+# ╞═════╪═════════╡
+# │ 25  ┆ NYC     │
+# │ 30  ┆ LA      │
+# └─────┴─────────┘
+
+df.iloc[[0, 2], :]  # Select specific rows, all columns
+# Output:
+# shape: (2, 3)
+# ┌─────────┬─────┬─────────┐
+# │ name    ┆ age ┆ city    │
+# │ ---     ┆ --- ┆ ---     │
+# │ str     ┆ i64 ┆ str     │
+# ╞═════════╪═════╪═════════╡
+# │ Alice   ┆ 25  ┆ NYC     │
+# │ Charlie ┆ 35  ┆ Chicago  │
+# └─────────┴─────┴─────────┘
 
 # Assignment
-df.loc[df["age"] > 30, "senior"] = True
-df.iloc[0, 0] = "New Value"
+df.loc["a", "age"] = 26
+df.iloc[0, 0] = "Alice Updated"
 ```
 
 ## 🏗️ **Architecture**
@@ -218,14 +289,16 @@ python benchmark_large.py
 ## 🧪 **Testing & Quality**
 
 ### ✅ **Comprehensive Testing**
-- **327 tests passing** (100% success rate)
+- **457 tests passing** (100% success rate)
 - **54 tests properly skipped** (documented limitations)
-- **72% code coverage** across all functionality
+- **82% code coverage** across all functionality
 - **Edge case handling** for empty DataFrames, null values, mixed types
+- **Comprehensive error handling** with proper exception conversion
 
 ### ✅ **Code Quality**
 - **Zero linting errors** with ruff compliance
-- **30% improvement in type safety** (mypy errors reduced)
+- **100% type safety** - all mypy type errors resolved
+- **Fully formatted code** with ruff formatter
 - **Clean code standards** throughout
 - **Production-ready** code quality
 
@@ -256,14 +329,20 @@ pytest tests/test_dataframe_core.py -v
 ### **Code Quality**
 ```bash
 # Format code
-ruff format src/polarpandas/
+ruff format .
 
 # Check linting
-ruff check src/polarpandas/
+ruff check .
 
 # Type checking
 mypy src/polarpandas/
 ```
+
+**Current Status:**
+- ✅ All tests passing (457 passed, 54 skipped)
+- ✅ Zero linting errors
+- ✅ Zero mypy errors
+- ✅ Code fully formatted
 
 ### **Benchmarks**
 ```bash
@@ -332,13 +411,17 @@ pip install -e ".[dev,test]"
 
 ## 📈 **Roadmap**
 
-### **v0.2.0 (Current)**
+### **v0.3.0 (Current)**
+- ✅ **Comprehensive Documentation** - Professional docstrings for all public APIs
 - ✅ **LazyFrame Class** - Optional lazy execution for maximum performance
 - ✅ **Lazy I/O Operations** - `scan_csv()`, `scan_parquet()`, `scan_json()`
 - ✅ **Eager DataFrame** - Default pandas-like behavior
 - ✅ **Seamless Conversion** - `df.lazy()` and `lf.collect()` methods
+- ✅ **100% Type Safety** - All mypy errors resolved
+- ✅ **Comprehensive Testing** - 457 tests covering all functionality
+- ✅ **Code Quality** - Zero linting errors, fully formatted code
 
-### **v0.3.0 (Planned)**
+### **v0.4.0 (Planned)**
 - [ ] Advanced MultiIndex support
 - [ ] More statistical methods
 - [ ] Enhanced I/O formats (SQL, Feather, HDF5)
