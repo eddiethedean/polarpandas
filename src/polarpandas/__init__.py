@@ -12,6 +12,7 @@ from .datetime import (
 )
 from .frame import DataFrame
 from .index import Index
+from .lazyframe import LazyFrame
 
 # I/O operations
 from .io import (
@@ -21,6 +22,9 @@ from .io import (
     read_json,
     read_parquet,
     read_sql,
+    scan_csv,
+    scan_json,
+    scan_parquet,
 )
 
 # Data manipulation operations
@@ -46,6 +50,7 @@ __version__ = "0.2.0"
 __all__ = [
     # Core classes
     "DataFrame",
+    "LazyFrame",
     "Series",
     "Index",
     # I/O operations
@@ -55,6 +60,9 @@ __all__ = [
     "read_excel",
     "read_sql",
     "read_feather",
+    "scan_csv",
+    "scan_parquet",
+    "scan_json",
     # Data manipulation
     "concat",
     "merge",

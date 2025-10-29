@@ -21,16 +21,16 @@ class TestTranspose:
             "B": [10, 20, 30, 40, 50],
             "C": ["a", "b", "c", "d", "e"],
         }
-        self.pd_df = pd.DataFrame(self.data)
-        self.ppd_df = ppd.DataFrame(self.data)
+        # Don't create DataFrames here to avoid state pollution
+        # Each test method will create fresh DataFrames
 
     @pytest.mark.skip(
         reason="Known limitation: Polars transpose converts mixed types to strings, pandas preserves as objects"
     )
     def test_transpose_basic(self):
         """Test basic transpose functionality."""
-        pd_result = self.pd_df.transpose()
-        ppd_result = self.ppd_df.transpose()
+        pd_result = pd.DataFrame(self.data).transpose()
+        ppd_result = ppd.DataFrame(self.data).transpose()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
@@ -38,8 +38,8 @@ class TestTranspose:
     )
     def test_T_property(self):
         """Test T property."""
-        pd_result = self.pd_df.T
-        ppd_result = self.ppd_df.T
+        pd_result = pd.DataFrame(self.data).T
+        ppd_result = ppd.DataFrame(self.data).T
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
@@ -48,8 +48,8 @@ class TestTranspose:
     def test_transpose_with_index(self):
         """Test transpose with custom index."""
         # Set index first
-        pd_df_indexed = self.pd_df.set_index("A")
-        ppd_df_indexed = self.ppd_df.set_index("A")
+        pd_df_indexed = pd.DataFrame(self.data).set_index("A")
+        ppd_df_indexed = ppd.DataFrame(self.data).set_index("A")
 
         pd_result = pd_df_indexed.transpose()
         ppd_result = ppd_df_indexed.transpose()
@@ -127,30 +127,30 @@ class TestTranspose:
 
     def test_transpose_preserves_original(self):
         """Test that transpose doesn't modify original DataFrame."""
-        original_pd = self.pd_df.copy()
-        original_ppd = self.ppd_df.copy()
+        original_pd = pd.DataFrame(self.data).copy()
+        original_ppd = ppd.DataFrame(self.data).copy()
 
         # Perform transpose
-        self.pd_df.transpose()
-        self.ppd_df.transpose()
+        pd.DataFrame(self.data).transpose()
+        ppd.DataFrame(self.data).transpose()
 
         # Original should be unchanged
-        pd.testing.assert_frame_equal(original_pd, self.pd_df)
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), self.ppd_df.to_pandas())
+        pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
+        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())
 
     def test_transpose_return_type(self):
         """Test that transpose returns correct type."""
-        result = self.ppd_df.transpose()
+        result = ppd.DataFrame(self.data).transpose()
         assert isinstance(result, ppd.DataFrame)
 
-        result_T = self.ppd_df.T
+        result_T = ppd.DataFrame(self.data).T
         assert isinstance(result_T, ppd.DataFrame)
 
     def test_transpose_chain_operations(self):
         """Test chaining transpose operations."""
         # Double transpose should return original
-        _ = self.pd_df.transpose().transpose()
-        _ = self.ppd_df.transpose().transpose()
+        _ = pd.DataFrame(self.data).transpose().transpose()
+        _ = ppd.DataFrame(self.data).transpose().transpose()
 
         # Skip this test due to known limitation: Polars handles mixed types differently
         # after multiple transpose operations, causing dtype changes (int64 -> object)

@@ -17,53 +17,53 @@ class TestSeriesComparison:
     def setup_method(self):
         """Create test data in both pandas and polarpandas."""
         self.data = [1, 2, 3, 4, 5]
-        self.pd_series = pd.Series(self.data)
-        self.ppd_series = ppd.Series(self.data)
+        # Don't create Series here to avoid state pollution
+        # Each test method will create fresh Series
 
     def test_gt_comparison(self):
         """Test greater than comparison."""
-        pd_result = self.pd_series > 3
-        ppd_result = self.ppd_series > 3
+        pd_result = pd.Series(self.data) > 3
+        ppd_result = ppd.Series(self.data) > 3
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_lt_comparison(self):
         """Test less than comparison."""
-        pd_result = self.pd_series < 3
-        ppd_result = self.ppd_series < 3
+        pd_result = pd.Series(self.data) < 3
+        ppd_result = ppd.Series(self.data) < 3
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_ge_comparison(self):
         """Test greater than or equal comparison."""
-        pd_result = self.pd_series >= 3
-        ppd_result = self.ppd_series >= 3
+        pd_result = pd.Series(self.data) >= 3
+        ppd_result = ppd.Series(self.data) >= 3
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_le_comparison(self):
         """Test less than or equal comparison."""
-        pd_result = self.pd_series <= 3
-        ppd_result = self.ppd_series <= 3
+        pd_result = pd.Series(self.data) <= 3
+        ppd_result = ppd.Series(self.data) <= 3
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_eq_comparison(self):
         """Test equal comparison."""
-        pd_result = self.pd_series == 3
-        ppd_result = self.ppd_series == 3
+        pd_result = pd.Series(self.data) == 3
+        ppd_result = ppd.Series(self.data) == 3
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_ne_comparison(self):
         """Test not equal comparison."""
-        pd_result = self.pd_series != 3
-        ppd_result = self.ppd_series != 3
+        pd_result = pd.Series(self.data) != 3
+        ppd_result = ppd.Series(self.data) != 3
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
@@ -74,8 +74,8 @@ class TestSeriesComparison:
         pd_other = pd.Series(other_data)
         ppd_other = ppd.Series(other_data)
 
-        pd_result = self.pd_series > pd_other
-        ppd_result = self.ppd_series > ppd_other
+        pd_result = pd.Series(self.data) > pd_other
+        ppd_result = ppd.Series(self.data) > ppd_other
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
@@ -87,13 +87,13 @@ class TestSeriesMethods:
     def setup_method(self):
         """Create test data in both pandas and polarpandas."""
         self.data = [1, 2, 3, 4, 5]
-        self.pd_series = pd.Series(self.data)
-        self.ppd_series = ppd.Series(self.data)
+        # Don't create Series here to avoid state pollution
+        # Each test method will create fresh Series
 
     def test_between_basic(self):
         """Test between method."""
-        pd_result = self.pd_series.between(2, 4)
-        ppd_result = self.ppd_series.between(2, 4)
+        pd_result = pd.Series(self.data).between(2, 4)
+        ppd_result = ppd.Series(self.data).between(2, 4)
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
@@ -101,56 +101,56 @@ class TestSeriesMethods:
     def test_between_inclusive(self):
         """Test between with different inclusive options."""
         # Test 'neither'
-        pd_result = self.pd_series.between(2, 4, inclusive="neither")
-        ppd_result = self.ppd_series.between(2, 4, inclusive="neither")
+        pd_result = pd.Series(self.data).between(2, 4, inclusive="neither")
+        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="neither")
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_clip_basic(self):
         """Test clip method."""
-        pd_result = self.pd_series.clip(lower=2, upper=4)
-        ppd_result = self.ppd_series.clip(lower=2, upper=4)
+        pd_result = pd.Series(self.data).clip(lower=2, upper=4)
+        ppd_result = ppd.Series(self.data).clip(lower=2, upper=4)
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_clip_lower_only(self):
         """Test clip with only lower bound."""
-        pd_result = self.pd_series.clip(lower=3)
-        ppd_result = self.ppd_series.clip(lower=3)
+        pd_result = pd.Series(self.data).clip(lower=3)
+        ppd_result = ppd.Series(self.data).clip(lower=3)
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_clip_upper_only(self):
         """Test clip with only upper bound."""
-        pd_result = self.pd_series.clip(upper=3)
-        ppd_result = self.ppd_series.clip(upper=3)
+        pd_result = pd.Series(self.data).clip(upper=3)
+        ppd_result = ppd.Series(self.data).clip(upper=3)
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_rank_basic(self):
         """Test rank method."""
-        pd_result = self.pd_series.rank()
-        ppd_result = self.ppd_series.rank()
+        pd_result = pd.Series(self.data).rank()
+        ppd_result = ppd.Series(self.data).rank()
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_rank_method(self):
         """Test rank with different method."""
-        pd_result = self.pd_series.rank(method="min")
-        ppd_result = self.ppd_series.rank(method="min")
+        pd_result = pd.Series(self.data).rank(method="min")
+        ppd_result = ppd.Series(self.data).rank(method="min")
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
 
     def test_rank_descending(self):
         """Test rank with descending order."""
-        pd_result = self.pd_series.rank(ascending=False)
-        ppd_result = self.ppd_series.rank(ascending=False)
+        pd_result = pd.Series(self.data).rank(ascending=False)
+        ppd_result = ppd.Series(self.data).rank(ascending=False)
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
         )
@@ -269,46 +269,46 @@ class TestSeriesMethods:
     def test_methods_return_types(self):
         """Test that methods return correct types."""
         # Test comparison operators
-        result = self.ppd_series > 3
+        result = ppd.Series(self.data) > 3
         assert isinstance(result, ppd.Series)
 
         # Test between
-        result = self.ppd_series.between(2, 4)
+        result = ppd.Series(self.data).between(2, 4)
         assert isinstance(result, ppd.Series)
 
         # Test clip
-        result = self.ppd_series.clip(lower=2, upper=4)
+        result = ppd.Series(self.data).clip(lower=2, upper=4)
         assert isinstance(result, ppd.Series)
 
         # Test rank
-        result = self.ppd_series.rank()
+        result = ppd.Series(self.data).rank()
         assert isinstance(result, ppd.Series)
 
         # Test sort_values
-        result = self.ppd_series.sort_values()
+        result = ppd.Series(self.data).sort_values()
         assert isinstance(result, ppd.Series)
 
         # Test value_counts
-        result = self.ppd_series.value_counts()
+        result = ppd.Series(self.data).value_counts()
         assert isinstance(result, ppd.Series)
 
         # Test unique
-        result = self.ppd_series.unique()
+        result = ppd.Series(self.data).unique()
         assert isinstance(result, ppd.Series)
 
     def test_methods_preserve_original(self):
         """Test that methods don't modify original Series."""
-        original_pd = self.pd_series.copy()
-        original_ppd = self.ppd_series.copy()
+        original_pd = pd.Series(self.data).copy()
+        original_ppd = ppd.Series(self.data).copy()
 
         # Perform operations
-        self.pd_series.between(2, 4)
-        self.ppd_series.between(2, 4)
-        self.pd_series.clip(lower=2, upper=4)
-        self.ppd_series.clip(lower=2, upper=4)
+        pd.Series(self.data).between(2, 4)
+        ppd.Series(self.data).between(2, 4)
+        pd.Series(self.data).clip(lower=2, upper=4)
+        ppd.Series(self.data).clip(lower=2, upper=4)
 
         # Original should be unchanged
-        pd.testing.assert_series_equal(original_pd, self.pd_series)
+        pd.testing.assert_series_equal(original_pd, pd.Series(self.data))
         pd.testing.assert_series_equal(
-            original_ppd.to_pandas(), self.ppd_series.to_pandas()
+            original_ppd.to_pandas(), ppd.Series(self.data).to_pandas()
         )

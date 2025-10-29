@@ -26,13 +26,14 @@ class TestCSVIOComprehensive:
             "B": [10, 20, 30, 40, 50],
             "C": ["a", "b", "c", "d", "e"],
         }
-        self.pd_df = pd.DataFrame(self.data)
-        self.ppd_df = ppd.DataFrame(self.data)
+        # Don't create DataFrames here to avoid state pollution
+        # Each test method will create fresh DataFrames
 
     def test_read_csv_basic(self):
         """Test basic CSV reading."""
+        pd_df = pd.DataFrame(self.data)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=False)
+            pd_df.to_csv(f.name, index=False)
 
             pd_result = pd.read_csv(f.name)
             ppd_result = ppd.read_csv(f.name)
@@ -43,7 +44,7 @@ class TestCSVIOComprehensive:
     def test_read_csv_with_index(self):
         """Test CSV reading with index."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=True)
+            pd.DataFrame(self.data).to_csv(f.name, index=True)
 
             pd_result = pd.read_csv(f.name, index_col=0)
             ppd_result = ppd.read_csv(f.name, index_col=0)
@@ -97,7 +98,7 @@ class TestCSVIOComprehensive:
     def test_read_csv_with_separator(self):
         """Test CSV reading with different separator."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=False, sep=";")
+            pd.DataFrame(self.data).to_csv(f.name, index=False, sep=";")
 
             pd_result = pd.read_csv(f.name, sep=";")
             ppd_result = ppd.read_csv(f.name, sep=";")
@@ -108,7 +109,7 @@ class TestCSVIOComprehensive:
     def test_read_csv_with_header(self):
         """Test CSV reading with custom header."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=False, header=["X", "Y", "Z"])
+            pd.DataFrame(self.data).to_csv(f.name, index=False, header=["X", "Y", "Z"])
 
             pd_result = pd.read_csv(f.name, names=["X", "Y", "Z"])
             ppd_result = ppd.read_csv(f.name, names=["X", "Y", "Z"])
@@ -121,7 +122,7 @@ class TestCSVIOComprehensive:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             # Add header row
             f.write("Header line\n")
-            self.pd_df.to_csv(f.name, index=False, mode="a")
+            pd.DataFrame(self.data).to_csv(f.name, index=False, mode="a")
 
             pd_result = pd.read_csv(f.name, skiprows=1)
             ppd_result = ppd.read_csv(f.name, skiprows=1)
@@ -132,7 +133,7 @@ class TestCSVIOComprehensive:
     def test_read_csv_with_nrows(self):
         """Test CSV reading with nrows parameter."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=False)
+            pd.DataFrame(self.data).to_csv(f.name, index=False)
 
             pd_result = pd.read_csv(f.name, nrows=3)
             ppd_result = ppd.read_csv(f.name, nrows=3)
@@ -205,8 +206,8 @@ class TestCSVIOComprehensive:
     def test_to_csv_basic(self):
         """Test basic CSV writing."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=False)
-            self.ppd_df.to_csv(f.name, index=False)
+            pd.DataFrame(self.data).to_csv(f.name, index=False)
+            ppd.DataFrame(self.data).to_csv(f.name, index=False)
 
             # Read back and compare
             pd_result = pd.read_csv(f.name)
@@ -218,8 +219,8 @@ class TestCSVIOComprehensive:
     def test_to_csv_with_index(self):
         """Test CSV writing with index."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=True)
-            self.ppd_df.to_csv(f.name, index=True)
+            pd.DataFrame(self.data).to_csv(f.name, index=True)
+            ppd.DataFrame(self.data).to_csv(f.name, index=True)
 
             # Read back and compare
             pd_result = pd.read_csv(f.name, index_col=0)
@@ -231,8 +232,8 @@ class TestCSVIOComprehensive:
     def test_to_csv_with_separator(self):
         """Test CSV writing with different separator."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=False, sep=";")
-            self.ppd_df.to_csv(f.name, index=False, sep=";")
+            pd.DataFrame(self.data).to_csv(f.name, index=False, sep=";")
+            ppd.DataFrame(self.data).to_csv(f.name, index=False, sep=";")
 
             # Read back and compare
             pd_result = pd.read_csv(f.name, sep=";")
@@ -245,13 +246,13 @@ class TestCSVIOComprehensive:
         """Test CSV writing with custom header."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             # Test pandas
-            self.pd_df.to_csv(f.name, index=False, header=["X", "Y", "Z"])
+            pd.DataFrame(self.data).to_csv(f.name, index=False, header=["X", "Y", "Z"])
             pd_result = pd.read_csv(f.name, names=["X", "Y", "Z"])
 
             # Clear file and test polarpandas
             with open(f.name, "w") as f:
                 pass  # Clear the file
-            self.ppd_df.to_csv(f.name, index=False, header=["X", "Y", "Z"])
+            ppd.DataFrame(self.data).to_csv(f.name, index=False, header=["X", "Y", "Z"])
             ppd_result = ppd.read_csv(f.name, names=["X", "Y", "Z"])
 
             # Compare results
@@ -263,25 +264,25 @@ class TestCSVIOComprehensive:
         """Test that I/O methods return correct types."""
         # Test read_csv
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=False)
+            pd.DataFrame(self.data).to_csv(f.name, index=False)
             result = ppd.read_csv(f.name)
             assert isinstance(result, ppd.DataFrame)
             os.unlink(f.name)
 
     def test_io_methods_preserve_original(self):
         """Test that I/O methods don't modify original DataFrame."""
-        original_pd = self.pd_df.copy()
-        original_ppd = self.ppd_df.copy()
+        original_pd = pd.DataFrame(self.data).copy()
+        original_ppd = ppd.DataFrame(self.data).copy()
 
         # Perform I/O operations
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            self.pd_df.to_csv(f.name, index=False)
-            self.ppd_df.to_csv(f.name, index=False)
+            pd.DataFrame(self.data).to_csv(f.name, index=False)
+            ppd.DataFrame(self.data).to_csv(f.name, index=False)
             os.unlink(f.name)
 
         # Original should be unchanged
-        pd.testing.assert_frame_equal(original_pd, self.pd_df)
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), self.ppd_df.to_pandas())
+        pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
+        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())
 
 
 class TestJSONIOComprehensive:
@@ -294,13 +295,13 @@ class TestJSONIOComprehensive:
             "B": [10, 20, 30, 40, 50],
             "C": ["a", "b", "c", "d", "e"],
         }
-        self.pd_df = pd.DataFrame(self.data)
-        self.ppd_df = ppd.DataFrame(self.data)
+        # Don't create DataFrames here to avoid state pollution
+        # Each test method will create fresh DataFrames
 
     def test_read_json_basic(self):
         """Test basic JSON reading."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="records")
+            pd.DataFrame(self.data).to_json(f.name, orient="records")
 
             pd_result = pd.read_json(f.name, orient="records")
             ppd_result = ppd.read_json(f.name, orient="records")
@@ -314,7 +315,7 @@ class TestJSONIOComprehensive:
     def test_read_json_with_index(self):
         """Test JSON reading with index."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="index")
+            pd.DataFrame(self.data).to_json(f.name, orient="index")
 
             pd_result = pd.read_json(f.name, orient="index")
             ppd_result = ppd.read_json(f.name, orient="index")
@@ -328,7 +329,7 @@ class TestJSONIOComprehensive:
     def test_read_json_with_columns(self):
         """Test JSON reading with columns orientation."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="columns")
+            pd.DataFrame(self.data).to_json(f.name, orient="columns")
 
             pd_result = pd.read_json(f.name, orient="columns")
             ppd_result = ppd.read_json(f.name, orient="columns")
@@ -342,7 +343,7 @@ class TestJSONIOComprehensive:
     def test_read_json_with_values(self):
         """Test JSON reading with values orientation."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="values")
+            pd.DataFrame(self.data).to_json(f.name, orient="values")
 
             pd_result = pd.read_json(f.name, orient="values")
             ppd_result = ppd.read_json(f.name, orient="values")
@@ -356,7 +357,7 @@ class TestJSONIOComprehensive:
     def test_read_json_with_split(self):
         """Test JSON reading with split orientation."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="split")
+            pd.DataFrame(self.data).to_json(f.name, orient="split")
 
             pd_result = pd.read_json(f.name, orient="split")
             ppd_result = ppd.read_json(f.name, orient="split")
@@ -370,7 +371,7 @@ class TestJSONIOComprehensive:
     def test_read_json_with_table(self):
         """Test JSON reading with table orientation."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="table")
+            pd.DataFrame(self.data).to_json(f.name, orient="table")
 
             pd_result = pd.read_json(f.name, orient="table")
             ppd_result = ppd.read_json(f.name, orient="table")
@@ -381,8 +382,8 @@ class TestJSONIOComprehensive:
     def test_to_json_basic(self):
         """Test basic JSON writing."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="records")
-            self.ppd_df.to_json(f.name, orient="records")
+            pd.DataFrame(self.data).to_json(f.name, orient="records")
+            ppd.DataFrame(self.data).to_json(f.name, orient="records")
 
             # Read back and compare
             pd_result = pd.read_json(f.name, orient="records")
@@ -397,8 +398,8 @@ class TestJSONIOComprehensive:
     def test_to_json_with_index(self):
         """Test JSON writing with index."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="index")
-            self.ppd_df.to_json(f.name, orient="index")
+            pd.DataFrame(self.data).to_json(f.name, orient="index")
+            ppd.DataFrame(self.data).to_json(f.name, orient="index")
 
             # Read back and compare
             pd_result = pd.read_json(f.name, orient="index")
@@ -413,8 +414,8 @@ class TestJSONIOComprehensive:
     def test_to_json_with_columns(self):
         """Test JSON writing with columns orientation."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="columns")
-            self.ppd_df.to_json(f.name, orient="columns")
+            pd.DataFrame(self.data).to_json(f.name, orient="columns")
+            ppd.DataFrame(self.data).to_json(f.name, orient="columns")
 
             # Read back and compare
             pd_result = pd.read_json(f.name, orient="columns")
@@ -429,8 +430,8 @@ class TestJSONIOComprehensive:
     def test_to_json_with_values(self):
         """Test JSON writing with values orientation."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="values")
-            self.ppd_df.to_json(f.name, orient="values")
+            pd.DataFrame(self.data).to_json(f.name, orient="values")
+            ppd.DataFrame(self.data).to_json(f.name, orient="values")
 
             # Read back and compare
             pd_result = pd.read_json(f.name, orient="values")
@@ -445,8 +446,8 @@ class TestJSONIOComprehensive:
     def test_to_json_with_split(self):
         """Test JSON writing with split orientation."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="split")
-            self.ppd_df.to_json(f.name, orient="split")
+            pd.DataFrame(self.data).to_json(f.name, orient="split")
+            ppd.DataFrame(self.data).to_json(f.name, orient="split")
 
             # Read back and compare
             pd_result = pd.read_json(f.name, orient="split")
@@ -461,8 +462,8 @@ class TestJSONIOComprehensive:
     def test_to_json_with_table(self):
         """Test JSON writing with table orientation."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="table")
-            self.ppd_df.to_json(f.name, orient="table")
+            pd.DataFrame(self.data).to_json(f.name, orient="table")
+            ppd.DataFrame(self.data).to_json(f.name, orient="table")
 
             # Read back and compare
             pd_result = pd.read_json(f.name, orient="table")
@@ -597,22 +598,22 @@ class TestJSONIOComprehensive:
         """Test that JSON I/O methods return correct types."""
         # Test read_json
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="records")
+            pd.DataFrame(self.data).to_json(f.name, orient="records")
             result = ppd.read_json(f.name, orient="records")
             assert isinstance(result, ppd.DataFrame)
             os.unlink(f.name)
 
     def test_json_io_methods_preserve_original(self):
         """Test that JSON I/O methods don't modify original DataFrame."""
-        original_pd = self.pd_df.copy()
-        original_ppd = self.ppd_df.copy()
+        original_pd = pd.DataFrame(self.data).copy()
+        original_ppd = ppd.DataFrame(self.data).copy()
 
         # Perform I/O operations
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            self.pd_df.to_json(f.name, orient="records")
-            self.ppd_df.to_json(f.name, orient="records")
+            pd.DataFrame(self.data).to_json(f.name, orient="records")
+            ppd.DataFrame(self.data).to_json(f.name, orient="records")
             os.unlink(f.name)
 
         # Original should be unchanged
-        pd.testing.assert_frame_equal(original_pd, self.pd_df)
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), self.ppd_df.to_pandas())
+        pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
+        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())

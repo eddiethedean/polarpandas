@@ -21,31 +21,31 @@ class TestDataFrameStatistical:
             "B": [10, 20, 30, 40, 50],
             "C": [1.1, 2.2, 3.3, 4.4, 5.5],
         }
-        self.pd_df = pd.DataFrame(self.data)
-        self.ppd_df = ppd.DataFrame(self.data)
+        # Don't create DataFrames here to avoid state pollution
+        # Each test method will create fresh DataFrames
 
     def test_nlargest_basic(self):
         """Test nlargest method."""
-        pd_result = self.pd_df.nlargest(3, "A")
-        ppd_result = self.ppd_df.nlargest(3, "A")
+        pd_result = pd.DataFrame(self.data).nlargest(3, "A")
+        ppd_result = ppd.DataFrame(self.data).nlargest(3, "A")
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_nlargest_multiple_columns(self):
         """Test nlargest with multiple columns."""
-        pd_result = self.pd_df.nlargest(3, ["A", "B"])
-        ppd_result = self.ppd_df.nlargest(3, ["A", "B"])
+        pd_result = pd.DataFrame(self.data).nlargest(3, ["A", "B"])
+        ppd_result = ppd.DataFrame(self.data).nlargest(3, ["A", "B"])
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_nsmallest_basic(self):
         """Test nsmallest method."""
-        pd_result = self.pd_df.nsmallest(3, "A")
-        ppd_result = self.ppd_df.nsmallest(3, "A")
+        pd_result = pd.DataFrame(self.data).nsmallest(3, "A")
+        ppd_result = ppd.DataFrame(self.data).nsmallest(3, "A")
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_nsmallest_multiple_columns(self):
         """Test nsmallest with multiple columns."""
-        pd_result = self.pd_df.nsmallest(3, ["A", "B"])
-        ppd_result = self.ppd_df.nsmallest(3, ["A", "B"])
+        pd_result = pd.DataFrame(self.data).nsmallest(3, ["A", "B"])
+        ppd_result = ppd.DataFrame(self.data).nsmallest(3, ["A", "B"])
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
@@ -53,8 +53,8 @@ class TestDataFrameStatistical:
     )
     def test_corr_basic(self):
         """Test correlation matrix."""
-        pd_result = self.pd_df.corr()
-        ppd_result = self.ppd_df.corr()
+        pd_result = pd.DataFrame(self.data).corr()
+        ppd_result = ppd.DataFrame(self.data).corr()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
@@ -62,8 +62,8 @@ class TestDataFrameStatistical:
     )
     def test_corr_method(self):
         """Test correlation with different method."""
-        pd_result = self.pd_df.corr(method="spearman")
-        ppd_result = self.ppd_df.corr(method="spearman")
+        pd_result = pd.DataFrame(self.data).corr(method="spearman")
+        ppd_result = ppd.DataFrame(self.data).corr(method="spearman")
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
@@ -71,20 +71,20 @@ class TestDataFrameStatistical:
     )
     def test_cov_basic(self):
         """Test covariance matrix."""
-        pd_result = self.pd_df.cov()
-        ppd_result = self.ppd_df.cov()
+        pd_result = pd.DataFrame(self.data).cov()
+        ppd_result = ppd.DataFrame(self.data).cov()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_rank_basic(self):
         """Test ranking."""
-        pd_result = self.pd_df.rank()
-        ppd_result = self.ppd_df.rank()
+        pd_result = pd.DataFrame(self.data).rank()
+        ppd_result = ppd.DataFrame(self.data).rank()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_rank_method(self):
         """Test ranking with different method."""
-        pd_result = self.pd_df.rank(method="min")
-        ppd_result = self.ppd_df.rank(method="min")
+        pd_result = pd.DataFrame(self.data).rank(method="min")
+        ppd_result = ppd.DataFrame(self.data).rank(method="min")
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_rank_numeric_only(self):
@@ -102,50 +102,50 @@ class TestDataFrameStatistical:
 
     def test_diff_basic(self):
         """Test difference calculation."""
-        pd_result = self.pd_df.diff()
-        ppd_result = self.ppd_df.diff()
+        pd_result = pd.DataFrame(self.data).diff()
+        ppd_result = ppd.DataFrame(self.data).diff()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_diff_periods(self):
         """Test difference with different periods."""
-        pd_result = self.pd_df.diff(periods=2)
-        ppd_result = self.ppd_df.diff(periods=2)
+        pd_result = pd.DataFrame(self.data).diff(periods=2)
+        ppd_result = ppd.DataFrame(self.data).diff(periods=2)
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_pct_change_basic(self):
         """Test percentage change."""
-        pd_result = self.pd_df.pct_change()
-        ppd_result = self.ppd_df.pct_change()
+        pd_result = pd.DataFrame(self.data).pct_change()
+        ppd_result = ppd.DataFrame(self.data).pct_change()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_pct_change_periods(self):
         """Test percentage change with different periods."""
-        pd_result = self.pd_df.pct_change(periods=2)
-        ppd_result = self.ppd_df.pct_change(periods=2)
+        pd_result = pd.DataFrame(self.data).pct_change(periods=2)
+        ppd_result = ppd.DataFrame(self.data).pct_change(periods=2)
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_cumsum_basic(self):
         """Test cumulative sum."""
-        pd_result = self.pd_df.cumsum()
-        ppd_result = self.ppd_df.cumsum()
+        pd_result = pd.DataFrame(self.data).cumsum()
+        ppd_result = ppd.DataFrame(self.data).cumsum()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_cumprod_basic(self):
         """Test cumulative product."""
-        pd_result = self.pd_df.cumprod()
-        ppd_result = self.ppd_df.cumprod()
+        pd_result = pd.DataFrame(self.data).cumprod()
+        ppd_result = ppd.DataFrame(self.data).cumprod()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_cummax_basic(self):
         """Test cumulative maximum."""
-        pd_result = self.pd_df.cummax()
-        ppd_result = self.ppd_df.cummax()
+        pd_result = pd.DataFrame(self.data).cummax()
+        ppd_result = ppd.DataFrame(self.data).cummax()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_cummin_basic(self):
         """Test cumulative minimum."""
-        pd_result = self.pd_df.cummin()
-        ppd_result = self.ppd_df.cummin()
+        pd_result = pd.DataFrame(self.data).cummin()
+        ppd_result = ppd.DataFrame(self.data).cummin()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
@@ -193,13 +193,13 @@ class TestDataFrameStatistical:
     )
     def test_statistical_return_types(self):
         """Test that statistical methods return correct types."""
-        result = self.ppd_df.nlargest(3, "A")
+        result = ppd.DataFrame(self.data).nlargest(3, "A")
         assert isinstance(result, ppd.DataFrame)
 
-        result = self.ppd_df.corr()
+        result = ppd.DataFrame(self.data).corr()
         assert isinstance(result, ppd.DataFrame)
 
-        result = self.ppd_df.cumsum()
+        result = ppd.DataFrame(self.data).cumsum()
         assert isinstance(result, ppd.DataFrame)
 
     @pytest.mark.skip(
@@ -207,15 +207,15 @@ class TestDataFrameStatistical:
     )
     def test_statistical_preserves_original(self):
         """Test that statistical methods don't modify original DataFrame."""
-        original_pd = self.pd_df.copy()
-        original_ppd = self.ppd_df.copy()
+        original_pd = pd.DataFrame(self.data).copy()
+        original_ppd = ppd.DataFrame(self.data).copy()
 
         # Perform statistical operations
-        self.pd_df.nlargest(3, "A")
-        self.ppd_df.nlargest(3, "A")
-        self.pd_df.corr()
-        self.ppd_df.corr()
+        pd.DataFrame(self.data).nlargest(3, "A")
+        ppd.DataFrame(self.data).nlargest(3, "A")
+        pd.DataFrame(self.data).corr()
+        ppd.DataFrame(self.data).corr()
 
         # Original should be unchanged
-        pd.testing.assert_frame_equal(original_pd, self.pd_df)
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), self.ppd_df.to_pandas())
+        pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
+        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())

@@ -2,8 +2,8 @@
 
 > **The fastest pandas-compatible API you'll ever use**
 
-[![Tests](https://img.shields.io/badge/tests-324%20passing-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
-[![Coverage](https://img.shields.io/badge/coverage-76%25-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
+[![Tests](https://img.shields.io/badge/tests-327%20passing-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
+[![Coverage](https://img.shields.io/badge/coverage-72%25-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
 [![Type Safety](https://img.shields.io/badge/type%20safety-71%20errors%20remaining-orange?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue?style=for-the-badge)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
@@ -52,13 +52,14 @@ print(df.head())
 ## 🎯 What's New in v0.2.0
 
 ### 🏆 **Production Ready**
-- ✅ **324 tests passing** (100% success rate)
-- ✅ **76% code coverage** with comprehensive test scenarios
-- ✅ **30% improvement in type safety** (101 → 71 mypy errors)
+- ✅ **327 tests passing** (100% success rate)
+- ✅ **72% code coverage** with comprehensive test scenarios
 - ✅ **Zero linting errors** - clean, production-ready code
 - ✅ **Proper limitation documentation** - 54 tests skipped with clear reasons
 
 ### 🚀 **New Features**
+- **🆕 LazyFrame Class** - Optional lazy execution for maximum performance
+- **🆕 Lazy I/O Operations** - `scan_csv()`, `scan_parquet()`, `scan_json()` for lazy loading
 - **Complete I/O operations** - Full CSV/JSON read/write support
 - **Advanced statistical methods** - `nlargest()`, `nsmallest()`, `rank()`, `diff()`, `pct_change()`
 - **String & datetime accessors** - Full `.str` and `.dt` accessor support
@@ -81,12 +82,50 @@ pip install polarpandas
 
 ## 🔥 Core Features
 
+### ⚡ **Eager vs Lazy Execution**
+
+PolarPandas gives you the **best of both worlds**:
+
+```python
+import polarpandas as ppd
+import polars as pl
+
+# 🚀 EAGER EXECUTION (Default - like pandas)
+df = ppd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+result = df.filter(df["a"] > 1)  # Executes immediately
+print(result)  # Shows results right away
+
+# ⚡ LAZY EXECUTION (Optional - for maximum performance)
+lf = df.lazy()  # Convert to LazyFrame
+lf_filtered = lf.filter(pl.col("a") > 1)  # Stays lazy
+df_result = lf_filtered.collect()  # Materialize when ready
+
+# 📁 LAZY I/O (For large files)
+lf = ppd.scan_csv("huge_file.csv")  # Lazy loading
+lf_processed = lf.filter(pl.col("value") > 100).select("name", "value")
+df_final = lf_processed.collect()  # Execute optimized plan
+```
+
+**When to use LazyFrame:**
+- 📊 **Large datasets** (>1M rows)
+- 🔄 **Complex operations** (multiple filters, joins, aggregations)
+- 💾 **Memory constraints** (lazy evaluation uses less memory)
+- ⚡ **Performance critical** applications
+
 ### 📊 **DataFrame Operations**
 ```python
 # Initialization
 df = ppd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
+
+# Eager I/O (immediate loading)
 df = ppd.read_csv("data.csv")
 df = ppd.read_json("data.json")
+df = ppd.read_parquet("data.parquet")
+
+# Lazy I/O (for large files)
+lf = ppd.scan_csv("large_file.csv")
+lf = ppd.scan_parquet("huge_file.parquet")
+lf = ppd.scan_json("big_file.json")
 
 # Mutable operations (pandas-style)
 df["new_col"] = df["A"] * 2
@@ -172,15 +211,16 @@ python benchmark_large.py
 
 ### **Memory Efficiency**
 - **50% less memory usage** than pandas
-- **Lazy evaluation** for complex operations
+- **⚡ Lazy evaluation** for complex operations (LazyFrame)
 - **Optimized data types** with Polars backend
+- **Query optimization** with lazy execution plans
 
 ## 🧪 **Testing & Quality**
 
 ### ✅ **Comprehensive Testing**
-- **324 tests passing** (100% success rate)
+- **327 tests passing** (100% success rate)
 - **54 tests properly skipped** (documented limitations)
-- **76% code coverage** across all functionality
+- **72% code coverage** across all functionality
 - **Edge case handling** for empty DataFrames, null values, mixed types
 
 ### ✅ **Code Quality**
@@ -291,6 +331,12 @@ pip install -e ".[dev,test]"
 **🎯 Best of both worlds: pandas API + Polars performance**
 
 ## 📈 **Roadmap**
+
+### **v0.2.0 (Current)**
+- ✅ **LazyFrame Class** - Optional lazy execution for maximum performance
+- ✅ **Lazy I/O Operations** - `scan_csv()`, `scan_parquet()`, `scan_json()`
+- ✅ **Eager DataFrame** - Default pandas-like behavior
+- ✅ **Seamless Conversion** - `df.lazy()` and `lf.collect()` methods
 
 ### **v0.3.0 (Planned)**
 - [ ] Advanced MultiIndex support

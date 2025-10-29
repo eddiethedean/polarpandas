@@ -22,38 +22,38 @@ class TestSetIndex:
             "C": ["a", "b", "c", "d", "e"],
             "D": [100, 200, 300, 400, 500],
         }
-        self.pd_df = pd.DataFrame(self.data)
-        self.ppd_df = ppd.DataFrame(self.data)
+        # Don't create DataFrames here to avoid state pollution
+        # Each test method will create fresh DataFrames
 
     def test_set_index_single_column(self):
         """Test setting index to single column."""
         # Test with drop=True (default)
-        pd_result = self.pd_df.set_index("A")
-        ppd_result = self.ppd_df.set_index("A")
+        pd_result = pd.DataFrame(self.data).set_index("A")
+        ppd_result = ppd.DataFrame(self.data).set_index("A")
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
         # Test with drop=False
-        pd_result = self.pd_df.set_index("A", drop=False)
-        ppd_result = self.ppd_df.set_index("A", drop=False)
+        pd_result = pd.DataFrame(self.data).set_index("A", drop=False)
+        ppd_result = ppd.DataFrame(self.data).set_index("A", drop=False)
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_set_index_multiple_columns(self):
         """Test setting index to multiple columns."""
         # Test with drop=True (default)
-        pd_result = self.pd_df.set_index(["A", "B"])
-        ppd_result = self.ppd_df.set_index(["A", "B"])
+        pd_result = pd.DataFrame(self.data).set_index(["A", "B"])
+        ppd_result = ppd.DataFrame(self.data).set_index(["A", "B"])
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
         # Test with drop=False
-        pd_result = self.pd_df.set_index(["A", "B"], drop=False)
-        ppd_result = self.ppd_df.set_index(["A", "B"], drop=False)
+        pd_result = pd.DataFrame(self.data).set_index(["A", "B"], drop=False)
+        ppd_result = ppd.DataFrame(self.data).set_index(["A", "B"], drop=False)
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_set_index_inplace(self):
         """Test inplace parameter."""
         # Test inplace=True
-        pd_df_copy = self.pd_df.copy()
-        ppd_df_copy = self.ppd_df.copy()
+        pd_df_copy = pd.DataFrame(self.data).copy()
+        ppd_df_copy = ppd.DataFrame(self.data).copy()
 
         pd_result = pd_df_copy.set_index("A", inplace=True)
         ppd_result = ppd_df_copy.set_index("A", inplace=True)
@@ -63,8 +63,8 @@ class TestSetIndex:
         pd.testing.assert_frame_equal(ppd_df_copy.to_pandas(), pd_df_copy)
 
         # Test inplace=False (default)
-        pd_df_copy = self.pd_df.copy()
-        ppd_df_copy = self.ppd_df.copy()
+        pd_df_copy = pd.DataFrame(self.data).copy()
+        ppd_df_copy = ppd.DataFrame(self.data).copy()
 
         pd_result = pd_df_copy.set_index("A", inplace=False)
         ppd_result = ppd_df_copy.set_index("A", inplace=False)
@@ -76,8 +76,8 @@ class TestSetIndex:
     def test_set_index_append(self):
         """Test append parameter."""
         # First set an index
-        pd_df_indexed = self.pd_df.set_index("A")
-        ppd_df_indexed = self.ppd_df.set_index("A")
+        pd_df_indexed = pd.DataFrame(self.data).set_index("A")
+        ppd_df_indexed = ppd.DataFrame(self.data).set_index("A")
 
         # Test append=True
         pd_result = pd_df_indexed.set_index("B", append=True)
@@ -91,14 +91,14 @@ class TestSetIndex:
 
     def test_set_index_string_column(self):
         """Test setting index to string column."""
-        pd_result = self.pd_df.set_index("C")
-        ppd_result = self.ppd_df.set_index("C")
+        pd_result = pd.DataFrame(self.data).set_index("C")
+        ppd_result = ppd.DataFrame(self.data).set_index("C")
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_set_index_mixed_types(self):
         """Test setting index with mixed data types."""
-        pd_result = self.pd_df.set_index(["A", "C"])
-        ppd_result = self.ppd_df.set_index(["A", "C"])
+        pd_result = pd.DataFrame(self.data).set_index(["A", "C"])
+        ppd_result = ppd.DataFrame(self.data).set_index(["A", "C"])
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_set_index_with_duplicates(self):
@@ -129,15 +129,15 @@ class TestSetIndex:
     def test_set_index_nonexistent_column(self):
         """Test set_index with non-existent column."""
         with pytest.raises(KeyError):
-            self.pd_df.set_index("nonexistent")
+            pd.DataFrame(self.data).set_index("nonexistent")
         with pytest.raises(KeyError):
-            self.ppd_df.set_index("nonexistent")
+            ppd.DataFrame(self.data).set_index("nonexistent")
 
     def test_set_index_already_indexed(self):
         """Test set_index on already indexed DataFrame."""
         # Set initial index
-        pd_df_indexed = self.pd_df.set_index("A")
-        ppd_df_indexed = self.ppd_df.set_index("A")
+        pd_df_indexed = pd.DataFrame(self.data).set_index("A")
+        ppd_df_indexed = ppd.DataFrame(self.data).set_index("A")
 
         # Set new index
         pd_result = pd_df_indexed.set_index("B")
@@ -146,16 +146,16 @@ class TestSetIndex:
 
     def test_set_index_preserve_original(self):
         """Test that original DataFrame is not modified when inplace=False."""
-        original_pd = self.pd_df.copy()
-        original_ppd = self.ppd_df.copy()
+        original_pd = pd.DataFrame(self.data).copy()
+        original_ppd = ppd.DataFrame(self.data).copy()
 
         # Set index without inplace
-        self.pd_df.set_index("A")
-        self.ppd_df.set_index("A")
+        pd.DataFrame(self.data).set_index("A")
+        ppd.DataFrame(self.data).set_index("A")
 
         # Original should be unchanged
-        pd.testing.assert_frame_equal(original_pd, self.pd_df)
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), self.ppd_df.to_pandas())
+        pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
+        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())
 
     @pytest.mark.skip(
         reason="Polars has limited support for null values in index - permanent limitation"
@@ -183,18 +183,18 @@ class TestSetIndex:
 
     def test_set_index_return_type(self):
         """Test that set_index returns correct type."""
-        result = self.ppd_df.set_index("A")
+        result = ppd.DataFrame(self.data).set_index("A")
         assert isinstance(result, ppd.DataFrame)
 
         # Test inplace=True returns None
-        result = self.ppd_df.set_index("A", inplace=True)
+        result = ppd.DataFrame(self.data).set_index("A", inplace=True)
         assert result is None
 
     def test_set_index_chain_operations(self):
         """Test chaining set_index operations."""
         # Chain multiple set_index operations
-        pd_result = self.pd_df.set_index("A").set_index("B", append=True)
-        ppd_result = self.ppd_df.set_index("A").set_index("B", append=True)
+        pd_result = pd.DataFrame(self.data).set_index("A").set_index("B", append=True)
+        ppd_result = ppd.DataFrame(self.data).set_index("A").set_index("B", append=True)
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_set_index_with_different_dtypes(self):
@@ -218,18 +218,18 @@ class TestSetIndex:
         """Test error handling matches pandas."""
         # Test with invalid column name
         with pytest.raises(KeyError):
-            self.pd_df.set_index("invalid")
+            pd.DataFrame(self.data).set_index("invalid")
         with pytest.raises(KeyError):
-            self.ppd_df.set_index("invalid")
+            ppd.DataFrame(self.data).set_index("invalid")
 
         # Test with empty list
         with pytest.raises(ValueError):
-            self.pd_df.set_index([])
+            pd.DataFrame(self.data).set_index([])
         with pytest.raises(ValueError):
-            self.ppd_df.set_index([])
+            ppd.DataFrame(self.data).set_index([])
 
         # Test with None - pandas raises KeyError, not TypeError
         with pytest.raises(KeyError):
-            self.pd_df.set_index(None)
+            pd.DataFrame(self.data).set_index(None)
         with pytest.raises(KeyError):
-            self.ppd_df.set_index(None)
+            ppd.DataFrame(self.data).set_index(None)

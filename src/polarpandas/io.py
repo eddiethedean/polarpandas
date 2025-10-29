@@ -7,6 +7,7 @@ Provides pandas-compatible I/O functions for reading and writing data.
 from typing import Any
 
 from .frame import DataFrame
+from .lazyframe import LazyFrame
 
 
 def read_csv(path: str, **kwargs: Any) -> DataFrame:
@@ -154,3 +155,81 @@ def read_feather(path: str, **kwargs: Any) -> DataFrame:
     >>> df = ppd.read_feather("data.feather")
     """
     return DataFrame.read_feather(path, **kwargs)
+
+
+def scan_csv(path: str, **kwargs: Any) -> LazyFrame:
+    """
+    Scan a CSV file into LazyFrame for lazy execution.
+
+    Parameters
+    ----------
+    path : str
+        Path to CSV file
+    **kwargs
+        Additional arguments passed to Polars scan_csv()
+
+    Returns
+    -------
+    LazyFrame
+        LazyFrame loaded from CSV
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> lf = ppd.scan_csv("data.csv")
+    >>> df = lf.collect()  # Materialize when ready
+    """
+    import polars as pl
+    return LazyFrame(pl.scan_csv(path, **kwargs))
+
+
+def scan_parquet(path: str, **kwargs: Any) -> LazyFrame:
+    """
+    Scan a Parquet file into LazyFrame for lazy execution.
+
+    Parameters
+    ----------
+    path : str
+        Path to Parquet file
+    **kwargs
+        Additional arguments passed to Polars scan_parquet()
+
+    Returns
+    -------
+    LazyFrame
+        LazyFrame loaded from Parquet
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> lf = ppd.scan_parquet("data.parquet")
+    >>> df = lf.collect()  # Materialize when ready
+    """
+    import polars as pl
+    return LazyFrame(pl.scan_parquet(path, **kwargs))
+
+
+def scan_json(path: str, **kwargs: Any) -> LazyFrame:
+    """
+    Scan a JSON file into LazyFrame for lazy execution.
+
+    Parameters
+    ----------
+    path : str
+        Path to JSON file
+    **kwargs
+        Additional arguments passed to Polars scan_ndjson()
+
+    Returns
+    -------
+    LazyFrame
+        LazyFrame loaded from JSON
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> lf = ppd.scan_json("data.json")
+    >>> df = lf.collect()  # Materialize when ready
+    """
+    import polars as pl
+    return LazyFrame(pl.scan_ndjson(path, **kwargs))

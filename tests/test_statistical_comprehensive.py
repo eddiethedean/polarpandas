@@ -23,8 +23,8 @@ class TestStatisticalMethodsComprehensive:
             "B": [10, 20, 30, 40, 50],
             "C": [1.1, 2.2, 3.3, 4.4, 5.5],
         }
-        self.pd_df = pd.DataFrame(self.data)
-        self.ppd_df = ppd.DataFrame(self.data)
+        # Don't create DataFrames here to avoid state pollution
+        # Each test method will create fresh DataFrames
 
     @pytest.mark.skip(
         reason="Polars doesn't have built-in correlation support - permanent limitation"
@@ -93,8 +93,8 @@ class TestStatisticalMethodsComprehensive:
     def test_corr_methods(self):
         """Test correlation with different methods."""
         for method in ["pearson", "kendall", "spearman"]:
-            pd_result = self.pd_df.corr(method=method)
-            ppd_result = self.ppd_df.corr(method=method)
+            pd_result = pd.DataFrame(self.data).corr(method=method)
+            ppd_result = ppd.DataFrame(self.data).corr(method=method)
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
@@ -117,14 +117,14 @@ class TestStatisticalMethodsComprehensive:
     def test_rank_methods(self):
         """Test rank with different methods."""
         for method in ["average", "min", "max", "first", "dense"]:
-            pd_result = self.pd_df.rank(method=method)
-            ppd_result = self.ppd_df.rank(method=method)
+            pd_result = pd.DataFrame(self.data).rank(method=method)
+            ppd_result = ppd.DataFrame(self.data).rank(method=method)
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_rank_ascending(self):
         """Test rank with ascending=False."""
-        pd_result = self.pd_df.rank(ascending=False)
-        ppd_result = self.ppd_df.rank(ascending=False)
+        pd_result = pd.DataFrame(self.data).rank(ascending=False)
+        ppd_result = ppd.DataFrame(self.data).rank(ascending=False)
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_rank_numeric_only(self):
@@ -143,15 +143,15 @@ class TestStatisticalMethodsComprehensive:
     def test_diff_periods(self):
         """Test diff with different periods."""
         for periods in [1, 2, 3]:
-            pd_result = self.pd_df.diff(periods=periods)
-            ppd_result = self.ppd_df.diff(periods=periods)
+            pd_result = pd.DataFrame(self.data).diff(periods=periods)
+            ppd_result = ppd.DataFrame(self.data).diff(periods=periods)
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_pct_change_periods(self):
         """Test pct_change with different periods."""
         for periods in [1, 2, 3]:
-            pd_result = self.pd_df.pct_change(periods=periods)
-            ppd_result = self.ppd_df.pct_change(periods=periods)
+            pd_result = pd.DataFrame(self.data).pct_change(periods=periods)
+            ppd_result = ppd.DataFrame(self.data).pct_change(periods=periods)
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     def test_cumsum_with_nulls(self):
@@ -264,39 +264,39 @@ class TestStatisticalMethodsComprehensive:
     def test_statistical_methods_return_types(self):
         """Test that statistical methods return correct types."""
         # Test correlation
-        result = self.ppd_df.corr()
+        result = ppd.DataFrame(self.data).corr()
         assert isinstance(result, ppd.DataFrame)
 
         # Test covariance
-        result = self.ppd_df.cov()
+        result = ppd.DataFrame(self.data).cov()
         assert isinstance(result, ppd.DataFrame)
 
         # Test rank
-        result = self.ppd_df.rank()
+        result = ppd.DataFrame(self.data).rank()
         assert isinstance(result, ppd.DataFrame)
 
         # Test diff
-        result = self.ppd_df.diff()
+        result = ppd.DataFrame(self.data).diff()
         assert isinstance(result, ppd.DataFrame)
 
         # Test pct_change
-        result = self.ppd_df.pct_change()
+        result = ppd.DataFrame(self.data).pct_change()
         assert isinstance(result, ppd.DataFrame)
 
         # Test cumsum
-        result = self.ppd_df.cumsum()
+        result = ppd.DataFrame(self.data).cumsum()
         assert isinstance(result, ppd.DataFrame)
 
         # Test cumprod
-        result = self.ppd_df.cumprod()
+        result = ppd.DataFrame(self.data).cumprod()
         assert isinstance(result, ppd.DataFrame)
 
         # Test cummax
-        result = self.ppd_df.cummax()
+        result = ppd.DataFrame(self.data).cummax()
         assert isinstance(result, ppd.DataFrame)
 
         # Test cummin
-        result = self.ppd_df.cummin()
+        result = ppd.DataFrame(self.data).cummin()
         assert isinstance(result, ppd.DataFrame)
 
     @pytest.mark.skip(
@@ -304,26 +304,26 @@ class TestStatisticalMethodsComprehensive:
     )
     def test_statistical_methods_preserve_original(self):
         """Test that statistical methods don't modify original DataFrame."""
-        original_pd = self.pd_df.copy()
-        original_ppd = self.ppd_df.copy()
+        original_pd = pd.DataFrame(self.data).copy()
+        original_ppd = ppd.DataFrame(self.data).copy()
 
         # Perform statistical operations
-        self.pd_df.corr()
-        self.ppd_df.corr()
-        self.pd_df.cov()
-        self.ppd_df.cov()
-        self.pd_df.rank()
-        self.ppd_df.rank()
-        self.pd_df.diff()
-        self.ppd_df.diff()
-        self.pd_df.pct_change()
-        self.ppd_df.pct_change()
-        self.pd_df.cumsum()
-        self.ppd_df.cumsum()
+        pd.DataFrame(self.data).corr()
+        ppd.DataFrame(self.data).corr()
+        pd.DataFrame(self.data).cov()
+        ppd.DataFrame(self.data).cov()
+        pd.DataFrame(self.data).rank()
+        ppd.DataFrame(self.data).rank()
+        pd.DataFrame(self.data).diff()
+        ppd.DataFrame(self.data).diff()
+        pd.DataFrame(self.data).pct_change()
+        ppd.DataFrame(self.data).pct_change()
+        pd.DataFrame(self.data).cumsum()
+        ppd.DataFrame(self.data).cumsum()
 
         # Original should be unchanged
-        pd.testing.assert_frame_equal(original_pd, self.pd_df)
-        pd.testing.assert_frame_equal(original_ppd.to_pandas(), self.ppd_df.to_pandas())
+        pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
+        pd.testing.assert_frame_equal(original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas())
 
 
 class TestEdgeCases:
