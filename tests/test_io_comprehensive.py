@@ -54,7 +54,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_with_nulls(self):
         """Test CSV reading with null values."""
@@ -74,7 +74,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_with_different_dtypes(self):
         """Test CSV reading with different data types."""
@@ -101,7 +101,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_with_separator(self):
         """Test CSV reading with different separator."""
@@ -114,7 +114,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_with_header(self):
         """Test CSV reading with custom header."""
@@ -127,7 +127,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_with_skiprows(self):
         """Test CSV reading with skiprows."""
@@ -142,7 +142,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_with_nrows(self):
         """Test CSV reading with nrows parameter."""
@@ -155,7 +155,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_empty_file(self):
         """Test CSV reading with empty file."""
@@ -171,7 +171,7 @@ class TestCSVIOComprehensive:
                 ppd.read_csv(filepath)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_single_column(self):
         """Test CSV reading with single column."""
@@ -187,7 +187,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_single_row(self):
         """Test CSV reading with single row."""
@@ -203,7 +203,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_csv_large_dataset(self):
         """Test CSV reading with large dataset."""
@@ -225,7 +225,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_to_csv_basic(self):
         """Test basic CSV writing."""
@@ -240,7 +240,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_to_csv_with_index(self):
         """Test CSV writing with index."""
@@ -255,7 +255,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_to_csv_with_separator(self):
         """Test CSV writing with different separator."""
@@ -270,7 +270,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_to_csv_with_header(self):
         """Test CSV writing with custom header."""
@@ -290,7 +290,7 @@ class TestCSVIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_io_methods_return_types(self):
         """Test that I/O methods return correct types."""
@@ -302,7 +302,7 @@ class TestCSVIOComprehensive:
             assert isinstance(result, ppd.DataFrame)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_io_methods_preserve_original(self):
         """Test that I/O methods don't modify original DataFrame."""
@@ -316,7 +316,7 @@ class TestCSVIOComprehensive:
             ppd.DataFrame(self.data).to_csv(filepath, index=False)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
         # Original should be unchanged
         pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
@@ -349,7 +349,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -365,7 +365,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -381,7 +381,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -397,7 +397,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -413,7 +413,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -429,7 +429,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_to_json_basic(self):
         """Test basic JSON writing."""
@@ -444,7 +444,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -462,7 +462,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -480,7 +480,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -498,7 +498,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -516,7 +516,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     @pytest.mark.skip(
         reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
@@ -534,7 +534,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_json_io_with_nulls(self):
         """Test JSON I/O with null values."""
@@ -557,7 +557,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_json_io_with_different_dtypes(self):
         """Test JSON I/O with different data types."""
@@ -587,7 +587,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_json_io_empty_dataframe(self):
         """Test JSON I/O with empty DataFrame."""
@@ -605,7 +605,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_json_io_single_column(self):
         """Test JSON I/O with single column."""
@@ -624,7 +624,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_json_io_single_row(self):
         """Test JSON I/O with single row."""
@@ -643,7 +643,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_json_io_large_dataset(self):
         """Test JSON I/O with large dataset."""
@@ -668,7 +668,7 @@ class TestJSONIOComprehensive:
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_read_excel_file_not_found(self):
         """Test read_excel raises NotImplementedError."""
@@ -745,7 +745,7 @@ class TestJSONIOComprehensive:
             assert isinstance(result, ppd.DataFrame)
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
     def test_json_io_methods_preserve_original(self):
         """Test that JSON I/O methods don't modify original DataFrame."""
@@ -759,7 +759,7 @@ class TestJSONIOComprehensive:
             ppd.DataFrame(self.data).to_json(filepath, orient="records")
         # Close file before deleting (Windows requirement)
         if os.path.exists(filepath):
-        os.unlink(filepath)
+            os.unlink(filepath)
 
         # Original should be unchanged
         pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
