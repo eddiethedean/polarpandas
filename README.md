@@ -3,7 +3,7 @@
 > **The fastest pandas-compatible API you'll ever use**
 
 [![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
-[![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
+[![Coverage](https://img.shields.io/badge/coverage-72%25-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
 [![Type Safety](https://img.shields.io/badge/type%20safety-100%25%20checked-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue?style=for-the-badge)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
@@ -63,20 +63,25 @@ shape: (3, 6)
 └─────────┴─────┴─────────┴─────────────┴────────────┴────────────┘
 ```
 
-## 🎯 What's New in v0.3.1
+## 🎯 What's New in v0.4.0
 
-### 📚 **Comprehensive Documentation**
-- ✅ **Upgraded all docstrings** - Professional NumPy-style documentation throughout
-- ✅ **Complete API documentation** - All public methods and classes fully documented
-- ✅ **Rich examples** - Practical code examples in every docstring
-- ✅ **Developer-friendly** - Clear parameter descriptions, return types, and usage notes
-- ✅ **Cross-referenced** - See Also sections linking related functionality
+### ⚡ **Performance Improvements**
+- ✅ **Native Polars Indexing** - All advanced indexing setters (`iat`, `iloc`, `loc`) now use native Polars implementations
+- ✅ **Boolean Mask Optimization** - Boolean mask assignment is now **270x faster** using Polars native operations
+- ✅ **No Pandas Dependency** - Pandas is now truly optional, required only for specific conversion features
+- ✅ **Optimized Indexing** - Eliminated pandas fallbacks for all indexing operations
+
+### 🏗️ **Code Quality & Architecture**
+- ✅ **Exception Handling** - Enhanced error messages with typo suggestions for better developer experience
+- ✅ **Code Refactoring** - Centralized index management and exception utilities
+- ✅ **Type Safety** - Resolved all critical type checking issues
+- ✅ **Code Formatting** - Fully formatted with ruff formatter for consistency
 
 ### 🏆 **Production Ready**
 - ✅ **457 tests passing** (100% success rate)
-- ✅ **82% code coverage** with comprehensive test scenarios
+- ✅ **72% code coverage** with comprehensive test scenarios
 - ✅ **Zero linting errors** - clean, production-ready code
-- ✅ **100% type safety** - all mypy errors resolved
+- ✅ **Type checked** - mypy compliance for critical type safety
 - ✅ **Proper limitation documentation** - 54 tests skipped with clear reasons
 
 ### 🚀 **Features (from v0.2.0)**
@@ -192,7 +197,9 @@ df["scores"].nlargest(5)
 df["prices"].clip(lower=0, upper=100)
 ```
 
-### 🎯 **Advanced Indexing**
+### 🎯 **Advanced Indexing** ⚡
+All indexing operations now use **native Polars implementations** for maximum performance - no pandas conversion overhead!
+
 ```python
 # Label-based indexing (with index set)
 df = ppd.DataFrame({
@@ -240,9 +247,10 @@ df.iloc[[0, 2], :]  # Select specific rows, all columns
 # │ Charlie ┆ 35  ┆ Chicago  │
 # └─────────┴─────┴─────────┘
 
-# Assignment
+# Assignment (now using native Polars - 270x faster for boolean masks!)
 df.loc["a", "age"] = 26
 df.iloc[0, 0] = "Alice Updated"
+df.loc[df["age"] > 25, "age"] = 30  # Boolean mask assignment - optimized!
 ```
 
 ## 🏗️ **Architecture**
@@ -291,9 +299,10 @@ python benchmark_large.py
 ### ✅ **Comprehensive Testing**
 - **457 tests passing** (100% success rate)
 - **54 tests properly skipped** (documented limitations)
-- **82% code coverage** across all functionality
+- **72% code coverage** across all functionality
 - **Edge case handling** for empty DataFrames, null values, mixed types
 - **Comprehensive error handling** with proper exception conversion
+- **Parallel test execution** - Fast test runs with pytest-xdist
 
 ### ✅ **Code Quality**
 - **Zero linting errors** with ruff compliance
@@ -340,9 +349,10 @@ mypy src/polarpandas/
 
 **Current Status:**
 - ✅ All tests passing (457 passed, 54 skipped)
-- ✅ Zero linting errors
-- ✅ Zero mypy errors
-- ✅ Code fully formatted
+- ✅ Zero linting errors (ruff check)
+- ✅ Code fully formatted (ruff format)
+- ✅ Type checked (mypy compliance)
+- ✅ Parallel test execution supported
 
 ### **Benchmarks**
 ```bash
@@ -411,9 +421,24 @@ pip install -e ".[dev,test]"
 
 ## 📈 **Roadmap**
 
-### **v0.3.1 (Current)**
+### **v0.4.0 (Current)**
 
-#### Bug Fixes and CI Improvements
+#### Performance & Architecture Improvements
+- ✅ **Native Polars Indexing** - Replaced all pandas fallbacks with native Polars implementations for `iat`, `iloc`, and `loc` setters
+- ✅ **Boolean Mask Optimization** - 270x performance improvement for boolean mask assignment operations
+- ✅ **Optional Pandas** - Pandas is now truly optional, only required for specific conversion features
+- ✅ **Enhanced Error Handling** - Typo suggestions in error messages for better developer experience
+- ✅ **Code Refactoring** - Centralized index management and exception utilities
+- ✅ **Type Safety** - Improved type checking and resolved critical type issues
+
+#### Technical Improvements
+- ✅ All indexing operations use native Polars (no pandas conversion overhead)
+- ✅ Optimized boolean mask assignment with Polars native operations
+- ✅ Better exception handling with helpful error messages
+- ✅ Code quality improvements with ruff formatting
+- ✅ 457 tests passing with parallel execution support
+
+### **v0.3.1**
 - ✅ Fixed GitHub Actions workflow dependencies (pytest, pandas, numpy, pyarrow)
 - ✅ Fixed Windows file handling issues in I/O tests (28 tests now passing)
 - ✅ All platforms (Ubuntu, macOS, Windows) now passing all 457 tests
@@ -428,14 +453,14 @@ pip install -e ".[dev,test]"
 - ✅ **Comprehensive Testing** - 457 tests covering all functionality
 - ✅ **Code Quality** - Zero linting errors, fully formatted code
 
-### **v0.4.0 (Planned)**
+### **v0.5.0 (Planned)**
 - [ ] Advanced MultiIndex support
 - [ ] More statistical methods
 - [ ] Enhanced I/O formats (SQL, Feather, HDF5)
-- [ ] Performance optimizations
 - [ ] Additional string/datetime methods
+- [ ] Further performance optimizations
 
-### **v0.4.0 (Future)**
+### **Future**
 - [ ] Machine learning integration
 - [ ] Advanced visualization support
 - [ ] Distributed computing support

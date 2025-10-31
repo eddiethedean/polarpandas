@@ -95,7 +95,7 @@ from .utils import (
 )
 
 # Version
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 # Main exports
 __all__ = [

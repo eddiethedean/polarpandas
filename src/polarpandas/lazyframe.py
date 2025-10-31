@@ -262,8 +262,11 @@ class LazyFrame:
                 return self._df.__getitem__(key)
         except Exception as e:
             # Convert Polars exceptions to pandas-compatible ones
-            if "not found" in str(e).lower() or "ColumnNotFoundError" in str(type(e)):
-                raise KeyError(str(e)) from e
+            from polarpandas._exceptions import convert_to_keyerror
+
+            converted = convert_to_keyerror(e)
+            if converted is not e:
+                raise converted from e
             raise
 
     @property

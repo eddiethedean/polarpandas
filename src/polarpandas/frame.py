@@ -40,6 +40,11 @@ from typing import (
 
 import polars as pl
 
+from polarpandas._exceptions import (
+    convert_to_keyerror,
+    create_keyerror_with_suggestions,
+)
+from polarpandas._index_manager import IndexManager
 from polarpandas.index import Index
 
 if TYPE_CHECKING:
@@ -545,7 +550,7 @@ class DataFrame:
             elif isinstance(key, list):
                 # Multiple columns - select and return DataFrame
                 result_df = self._df.select(key)
-                return DataFrame(result_df)
+                return IndexManager.preserve_index(self, result_df)
             elif isinstance(key, Series):  # type: ignore[unreachable]
                 # Boolean indexing with Series
                 polars_key = key._series
@@ -566,8 +571,9 @@ class DataFrame:
                 return self._df.__getitem__(key)
         except Exception as e:
             # Convert Polars exceptions to pandas-compatible ones
-            if "not found" in str(e).lower() or "ColumnNotFoundError" in str(type(e)):
-                raise KeyError(str(e)) from e
+            converted = convert_to_keyerror(e)
+            if converted is not e:
+                raise converted from e
             raise
 
     def __setitem__(self, column: str, values: Union[Any, "Series"]) -> None:
@@ -691,15 +697,16 @@ class DataFrame:
             result_df = self._df.drop(columns)
         except Exception as e:
             # Convert Polars exceptions to pandas-compatible ones
-            if "not found" in str(e).lower() or "ColumnNotFoundError" in str(type(e)):
-                raise KeyError(str(e)) from e
+            converted = convert_to_keyerror(e)
+            if converted is not e:
+                raise converted from e
             raise
 
         if inplace:
-            self._df = result_df
+            IndexManager.preserve_index_inplace(self, result_df)
             return None
         else:
-            return DataFrame(result_df)
+            return IndexManager.preserve_index(self, result_df)
 
     def rename(
         self,
@@ -1303,11 +1310,17 @@ class DataFrame:
                         other_lazy = pl.DataFrame._from_pydf(other_polars).lazy()
                 except (AttributeError, TypeError):
                     # Fallback: try to convert via pandas
-                    import pandas as pd
+                    try:
+                        import pandas as pd
 
-                    other_lazy = pl.from_pandas(
-                        pd.DataFrame(other_polars.to_dict())
-                    ).lazy()
+                        other_lazy = pl.from_pandas(
+                            pd.DataFrame(other_polars.to_dict())
+                        ).lazy()
+                    except ImportError as e:
+                        raise ImportError(
+                            "pandas is required for merging with unsupported DataFrame types. "
+                            "Install with: pip install pandas"
+                        ) from e
         elif isinstance(other_df, pl.DataFrame):
             # Convert Polars DataFrame to LazyFrame
             other_lazy = other_df.lazy()
@@ -1542,6 +1555,144 @@ class DataFrame:
         else:
             return DataFrame(result_df)
 
+    def _validate_index_keys(self, keys: Union[str, List[str]]) -> List[str]:
+        """Validate and normalize index keys.
+
+        Parameters
+        ----------
+        keys : str or list of str
+            Column name(s) to use as index
+
+        Returns
+        -------
+        List[str]
+            Normalized list of column names
+
+        Raises
+        ------
+        KeyError
+            If keys is None or contains invalid column names
+        ValueError
+            If keys is empty or contains nulls
+        """
+        # Handle None case - pandas raises KeyError for None
+        if keys is None:
+            raise KeyError("None of [None] are in the columns")
+
+        # Handle single column name
+        if isinstance(keys, str):
+            keys = [keys]
+
+        # Validate keys is not empty
+        if not keys:
+            raise ValueError("Must pass non-zero number of levels/codes")
+
+        # Validate keys exist
+        for key in keys:
+            if key not in self._df.columns:
+                raise create_keyerror_with_suggestions(
+                    key, self._df.columns, context="column"
+                )
+
+        # Check if any index columns contain nulls
+        has_nulls = any(self._df[key].null_count() > 0 for key in keys)
+
+        if has_nulls:
+            # Polars has limited null handling in index - this is a limitation
+            raise ValueError(
+                "Polars has limited support for null values in index. This is a known limitation."
+            )
+
+        return keys
+
+    def _build_index_from_keys(
+        self, keys: List[str], target_df: Optional[pl.DataFrame] = None
+    ) -> Tuple[List[Any], Union[str, Tuple[str, ...]]]:
+        """Build index values and name from column keys.
+
+        Parameters
+        ----------
+        keys : List[str]
+            Column names to use as index
+        target_df : pl.DataFrame, optional
+            DataFrame to extract values from (defaults to self._df)
+
+        Returns
+        -------
+        Tuple[List[Any], Union[str, Tuple[str, ...]]]
+            Tuple of (index_values, index_name)
+        """
+        if target_df is None:
+            target_df = self._df
+
+        if len(keys) == 1:
+            index_values = target_df[keys[0]].to_list()
+            index_name: Union[str, Tuple[str, ...]] = keys[0]
+        else:
+            # Multi-level index - create tuples
+            index_values = list(zip(*[target_df[key].to_list() for key in keys]))
+            index_name = tuple(keys)  # Store as tuple for hashability
+
+        return index_values, index_name
+
+    def _append_to_existing_index(
+        self, keys: List[str], target_df: Optional[pl.DataFrame] = None
+    ) -> Tuple[List[Any], Union[str, Tuple[str, ...]]]:
+        """Append columns to existing index.
+
+        Parameters
+        ----------
+        keys : List[str]
+            Column names to append to index
+        target_df : pl.DataFrame, optional
+            DataFrame to extract values from (defaults to self._df)
+
+        Returns
+        -------
+        Tuple[List[Any], Union[str, Tuple[str, ...]]]
+            Tuple of (new_index_values, new_index_name)
+        """
+        if target_df is None:
+            target_df = self._df
+
+        existing_index = list(self._index) if self._index is not None else []
+        new_values, _ = self._build_index_from_keys(keys, target_df)
+
+        # Create tuples of (existing_index[i], new_values[i])
+        new_index = []
+        for i in range(len(existing_index)):
+            if len(keys) == 1:
+                new_index.append((existing_index[i], new_values[i]))
+            else:
+                new_index.append((existing_index[i],) + new_values[i])
+
+        # Update index name for append
+        if isinstance(self._index_name, (list, tuple)):
+            new_index_name = tuple(list(self._index_name) + keys)
+        else:
+            new_index_name = (
+                tuple([self._index_name] + keys)
+                if self._index_name is not None
+                else tuple(keys)
+            )
+
+        return new_index, new_index_name
+
+    def _drop_index_columns(self, keys: List[str]) -> None:
+        """Drop columns used as index from DataFrame.
+
+        Parameters
+        ----------
+        keys : List[str]
+            Column names to drop
+        """
+        columns_to_keep = [col for col in self._df.columns if col not in keys]
+        if columns_to_keep:
+            self._df = self._df.select(columns_to_keep)
+        else:
+            # If all columns are used as index, create empty DataFrame with index
+            self._df = pl.DataFrame()
+
     def set_index(
         self,
         keys: Union[str, List[str]],
@@ -1568,78 +1719,20 @@ class DataFrame:
         DataFrame or None
             DataFrame with the new index or None if inplace=True.
         """
-        # Handle None case - pandas raises KeyError for None
-        if keys is None:
-            raise KeyError("None of [None] are in the columns")
-
-        # Handle single column name
-        if isinstance(keys, str):
-            keys = [keys]
-
-        # Validate keys is not empty
-        if not keys:
-            raise ValueError("Must pass non-zero number of levels/codes")
-
-        # Validate keys exist
-        for key in keys:
-            if key not in self._df.columns:
-                raise KeyError(f"'{key}'")
-
-        # Check if any index columns contain nulls
-        has_nulls = any(self._df[key].null_count() > 0 for key in keys)
-
-        if has_nulls:
-            # Polars has limited null handling in index - this is a limitation
-            raise ValueError(
-                "Polars has limited support for null values in index. This is a known limitation."
-            )
+        # Validate and normalize keys
+        keys = self._validate_index_keys(keys)
 
         if inplace:
             # Modify in place
             if append and self._index is not None:
-                # Append to existing index - create tuples
-                existing_index = list(self._index)
-                if len(keys) == 1:
-                    new_values = self._df[keys[0]].to_list()
-                else:
-                    new_values = list(zip(*[self._df[key].to_list() for key in keys]))
-
-                # Create tuples of (existing_index[i], new_values[i])
-                new_index = []
-                for i in range(len(existing_index)):
-                    if len(keys) == 1:
-                        new_index.append((existing_index[i], new_values[i]))
-                    else:
-                        new_index.append((existing_index[i],) + new_values[i])
-                self._index = new_index
-                # Update index name for append
-                if isinstance(self._index_name, (list, tuple)):
-                    self._index_name = tuple(list(self._index_name) + keys)
-                else:
-                    self._index_name = (
-                        tuple([self._index_name] + keys)
-                        if self._index_name is not None
-                        else tuple(keys)
-                    )
+                self._index, self._index_name = self._append_to_existing_index(keys)
             else:
                 # Replace index
-                if len(keys) == 1:
-                    self._index = self._df[keys[0]].to_list()
-                    self._index_name = keys[0]
-                else:
-                    # Multi-level index - create tuples
-                    new_values = list(zip(*[self._df[key].to_list() for key in keys]))
-                    self._index = new_values
-                    self._index_name = tuple(keys)  # Store as tuple for hashability
+                self._index, self._index_name = self._build_index_from_keys(keys)
 
             # Drop columns if requested
             if drop:
-                columns_to_keep = [col for col in self._df.columns if col not in keys]
-                if columns_to_keep:
-                    self._df = self._df.select(columns_to_keep)
-                else:
-                    # If all columns are used as index, create empty DataFrame with index
-                    self._df = pl.DataFrame()
+                self._drop_index_columns(keys)
 
             return None
         else:
@@ -1647,44 +1740,18 @@ class DataFrame:
             result = DataFrame(self._df)
 
             if append and self._index is not None:
-                # Append to existing index - create tuples
-                existing_index = list(self._index)
-                if len(keys) == 1:
-                    new_values = result._df[keys[0]].to_list()
-                else:
-                    new_values = list(zip(*[result._df[key].to_list() for key in keys]))
-
-                # Create tuples of (existing_index[i], new_values[i])
-                new_index = []
-                for i in range(len(existing_index)):
-                    if len(keys) == 1:
-                        new_index.append((existing_index[i], new_values[i]))
-                    else:
-                        new_index.append((existing_index[i],) + new_values[i])
-                result._index = new_index
-                # Update index name for append
-                if isinstance(self._index_name, (list, tuple)):
-                    result._index_name = tuple(list(self._index_name) + keys)
-                else:
-                    result._index_name = (
-                        tuple([self._index_name] + keys)
-                        if self._index_name is not None
-                        else tuple(keys)
-                    )
+                result._index, result._index_name = self._append_to_existing_index(
+                    keys, result._df
+                )
             else:
                 # Replace index
-                if len(keys) == 1:
-                    result._index = self._df[keys[0]].to_list()
-                    result._index_name = keys[0]
-                else:
-                    # Multi-level index - create tuples
-                    new_values = list(zip(*[result._df[key].to_list() for key in keys]))
-                    result._index = new_values
-                    result._index_name = tuple(keys)  # Store as tuple for hashability
+                result._index, result._index_name = self._build_index_from_keys(
+                    keys, result._df
+                )
 
             # Drop columns if requested
             if drop:
-                columns_to_keep = [col for col in self._df.columns if col not in keys]
+                columns_to_keep = [col for col in result._df.columns if col not in keys]
                 if columns_to_keep:
                     result._df = result._df.select(columns_to_keep)
                 else:
@@ -1804,20 +1871,36 @@ class DataFrame:
                 self._df.write_csv(path, **polars_kwargs)
                 return None
 
-        # Handle index=True case (convert to pandas and back)
-        try:
-            import pandas as pd  # noqa: F401
+        # Handle index=True case - add index as first column
+        else:  # index_param is True
+            # Create a copy with index as a column
+            df_to_write = self._df.clone()
 
-            pd_df = self.to_pandas()
-            if path is None:
-                return pd_df.to_csv(**kwargs)  # type: ignore[no-any-return]
+            # Add index column if we have one
+            if self._index is not None:
+                index_name = (
+                    self._index_name if self._index_name is not None else "index"
+                )
+                # Ensure index_name is a string (not tuple)
+                if isinstance(index_name, tuple):
+                    index_name = "_".join(str(n) for n in index_name)
+
+                # Add index as first column
+                df_to_write = df_to_write.with_columns(
+                    pl.Series(index_name, self._index)
+                ).select([index_name] + df_to_write.columns)
             else:
-                pd_df.to_csv(path, **kwargs)
+                # No stored index - use integer index
+                df_to_write = df_to_write.with_row_index("index").select(
+                    ["index"] + df_to_write.columns
+                )
+
+            # Write with index column included
+            if path is None:
+                return df_to_write.write_csv(**polars_kwargs)  # type: ignore[no-any-return]
+            else:
+                df_to_write.write_csv(path, **polars_kwargs)
                 return None
-        except ImportError as e:
-            raise ImportError(
-                "pandas is required for CSV operations with index=True"
-            ) from e
 
     def to_parquet(self, path: str, **kwargs: Any) -> None:
         """
@@ -3003,37 +3086,754 @@ class _LocIndexer:
 
     def _set_rows(self, row_key: Any, value: Any) -> None:
         """Set rows by label."""
-        # Convert to pandas for label-based indexing
-        pd_df = self._df.to_pandas()
+        polars_df = self._df._df
+        import polars as pl
 
-        # Set the index if we have a stored index
+        from polarpandas._exceptions import create_keyerror_with_suggestions
+
+        # Convert label row_key to integer position(s)
         if self._df._index is not None:
-            pd_df.index = self._df._index
+            # We have an index - convert labels to positions
+            # Handle pandas fallback: if integer not in index and index is not integer-based, use position
+            is_integer_index = (
+                all(
+                    isinstance(k, (int, type(None)))
+                    for k in self._df._index[:10]
+                    if k is not None
+                )
+                if self._df._index
+                else False
+            )
 
-        pd_df.loc[row_key] = value
-        self._df._df = pl.from_pandas(pd_df)
-        # Preserve the index after assignment
-        self._df._index = pd_df.index.tolist()
-        if hasattr(pd_df.index, "name"):
-            index_name_val = pd_df.index.name
-            self._df._index_name = index_name_val
+            if isinstance(row_key, slice):
+                # Slice of labels - convert to list of positions
+                start = row_key.start
+                stop = row_key.stop
+                step = row_key.step if row_key.step is not None else 1
+
+                # Find start position
+                if start is None:
+                    start_pos = 0
+                else:
+                    try:
+                        start_pos = self._df._index.index(start)
+                    except ValueError as err:
+                        # Pandas fallback for integer slices
+                        if isinstance(start, int) and not is_integer_index:
+                            start_pos = start if start >= 0 else len(polars_df) + start
+                        else:
+                            raise create_keyerror_with_suggestions(
+                                str(start),
+                                [str(k) for k in self._df._index],
+                                context="index",
+                            ) from err
+
+                # Find stop position
+                if stop is None:
+                    stop_pos = len(self._df._index)
+                else:
+                    try:
+                        stop_pos = (
+                            self._df._index.index(stop) + 1
+                        )  # +1 because slice is exclusive
+                    except ValueError as err:
+                        # Pandas fallback for integer slices
+                        if isinstance(stop, int) and not is_integer_index:
+                            stop_pos = (
+                                stop if stop >= 0 else len(polars_df) + stop
+                            ) + 1
+                        else:
+                            raise create_keyerror_with_suggestions(
+                                str(stop),
+                                [str(k) for k in self._df._index],
+                                context="index",
+                            ) from err
+
+                row_indices = list(range(start_pos, stop_pos, step))
+            elif isinstance(row_key, list):
+                # List of labels - convert each to position
+                row_indices = []
+                for label in row_key:
+                    try:
+                        row_indices.append(self._df._index.index(label))
+                    except ValueError as err:
+                        # Pandas fallback: if integer not found and index is not integer-based, use as position
+                        if isinstance(label, int) and not is_integer_index:
+                            label_pos = label if label >= 0 else len(polars_df) + label
+                            if 0 <= label_pos < len(polars_df):
+                                row_indices.append(label_pos)
+                            else:
+                                raise IndexError(
+                                    f"index {label_pos} is out of bounds"
+                                ) from err
+                        else:
+                            raise create_keyerror_with_suggestions(
+                                str(label),
+                                [str(k) for k in self._df._index],
+                                context="index",
+                            ) from err
+            else:
+                # Single label - convert to position
+                try:
+                    row_idx = self._df._index.index(row_key)
+                    row_indices = [row_idx]
+                except ValueError as err:
+                    # Pandas fallback: if integer not found and index is not integer-based, create new row
+                    if isinstance(row_key, int) and not is_integer_index:
+                        # Pandas creates a new row with this label when assigning
+                        # Add the new label to the index and create a new row
+                        if self._df._index is None:
+                            self._df._index = []
+                        self._df._index.append(row_key)  # type: ignore[union-attr]
+                        # For full row assignment (_set_rows), preserve dtypes - values will be assigned below
+                        # No float casting needed since we're assigning actual values, not leaving NaN
+                        new_row_data_no_cast: Dict[str, Any] = {}
+                        for col in polars_df.columns:
+                            dtype = polars_df[col].dtype
+                            # Use appropriate defaults that match dtype (preserve int types)
+                            if dtype in (
+                                pl.Int8,
+                                pl.Int16,
+                                pl.Int32,
+                                pl.Int64,
+                                pl.UInt8,
+                                pl.UInt16,
+                                pl.UInt32,
+                                pl.UInt64,
+                            ):
+                                new_row_data_no_cast[col] = 0
+                            elif dtype in (pl.Float32, pl.Float64):
+                                new_row_data_no_cast[col] = float("nan")
+                            elif dtype == pl.Boolean:
+                                new_row_data_no_cast[col] = False
+                            else:
+                                new_row_data_no_cast[col] = None
+
+                        new_row_df = pl.DataFrame([new_row_data_no_cast])
+                        polars_df = pl.concat([polars_df, new_row_df])
+                        self._df._df = polars_df
+                        row_indices = [len(polars_df) - 1]
+                    else:
+                        raise create_keyerror_with_suggestions(
+                            str(row_key),
+                            [str(k) for k in self._df._index],
+                            context="index",
+                        ) from err
+        else:
+            # No index - treat row_key as integer position
+            # For loc, if index doesn't exist, pandas creates new row with that label
+            if isinstance(row_key, slice):
+                start = row_key.start if row_key.start is not None else 0
+                stop = row_key.stop if row_key.stop is not None else len(polars_df)
+                step = row_key.step if row_key.step is not None else 1
+                row_indices = list(range(start, stop, step))
+            elif isinstance(row_key, list):
+                row_indices = row_key
+            else:
+                row_key_int = row_key
+                if isinstance(row_key_int, int) and row_key_int < 0:
+                    row_key_int = len(polars_df) + row_key_int
+                # Pandas loc creates new row if index doesn't exist (unlike iloc which raises)
+                if row_key_int >= len(polars_df) or row_key_int < 0:
+                    # Create new row with this integer as the label
+                    if self._df._index is None:
+                        # Initialize index with current row positions
+                        self._df._index = list(range(len(polars_df)))
+                    # Add the new label to the index (pandas creates one new row)
+                    self._df._index.append(row_key_int)
+                    # For full row assignment (_set_rows), preserve dtypes - values will be assigned below
+                    new_row_data: Dict[str, Any] = {}
+                    for col in polars_df.columns:
+                        dtype = polars_df[col].dtype
+                        # Use appropriate defaults that match dtype (preserve int types)
+                        if dtype in (
+                            pl.Int8,
+                            pl.Int16,
+                            pl.Int32,
+                            pl.Int64,
+                            pl.UInt8,
+                            pl.UInt16,
+                            pl.UInt32,
+                            pl.UInt64,
+                        ):
+                            new_row_data[col] = 0
+                        elif dtype in (pl.Float32, pl.Float64):
+                            new_row_data[col] = float("nan")
+                        elif dtype == pl.Boolean:
+                            new_row_data[col] = False
+                        else:
+                            new_row_data[col] = None
+
+                    new_row_df = pl.DataFrame([new_row_data])
+                    polars_df = pl.concat([polars_df, new_row_df])
+                    self._df._df = polars_df
+                    row_indices = [len(polars_df) - 1]
+                else:
+                    row_indices = [row_key_int]
+
+        # Handle value types (same pattern as _ILocIndexer._set_rows)
+        if isinstance(value, dict):
+            # Dict: update matching columns
+            new_cols = []
+            for col_name in polars_df.columns:
+                if col_name in value:
+                    # Column in dict - update rows
+                    if len(row_indices) == 1:
+                        new_cols.append(
+                            pl.when(pl.int_range(pl.len()) == row_indices[0])
+                            .then(pl.lit(value[col_name]))
+                            .otherwise(pl.col(col_name))
+                            .alias(col_name)
+                        )
+                    else:
+                        # Multiple rows - broadcast value or use list
+                        val = value[col_name]
+                        if isinstance(val, (list, pl.Series)) and len(val) == len(
+                            row_indices
+                        ):
+                            when_expr = pl.col(col_name)
+                            for row_idx, v in zip(
+                                row_indices, val if isinstance(val, list) else list(val)
+                            ):
+                                when_expr = (
+                                    pl.when(pl.int_range(pl.len()) == row_idx)
+                                    .then(pl.lit(v))
+                                    .otherwise(when_expr)
+                                )
+                            new_cols.append(when_expr.alias(col_name))
+                        else:
+                            # Broadcast scalar
+                            when_expr = pl.col(col_name)
+                            for row_idx in row_indices:
+                                when_expr = (
+                                    pl.when(pl.int_range(pl.len()) == row_idx)
+                                    .then(pl.lit(val))
+                                    .otherwise(when_expr)
+                                )
+                            new_cols.append(when_expr.alias(col_name))
+                else:
+                    # Column not in dict - keep original
+                    new_cols.append(pl.col(col_name))
+            polars_df = polars_df.with_columns(new_cols)
+        elif hasattr(value, "__iter__") and not isinstance(value, str):
+            # List, Series, or array-like
+            try:
+                import polarpandas as ppd
+
+                if isinstance(value, ppd.Series):
+                    # PolarPandas Series - extract values
+                    value_list = value.to_list()
+                elif isinstance(value, pl.Series):
+                    value_list = value.to_list()
+                else:
+                    value_list = list(value)
+
+                # Match columns in order
+                if len(value_list) == len(polars_df.columns):
+                    # Value matches number of columns - update each column
+                    new_cols = []
+                    for i, col_name in enumerate(polars_df.columns):
+                        col_val = value_list[i]
+                        if len(row_indices) == 1:
+                            new_cols.append(
+                                pl.when(pl.int_range(pl.len()) == row_indices[0])
+                                .then(pl.lit(col_val))
+                                .otherwise(pl.col(col_name))
+                                .alias(col_name)
+                            )
+                        else:
+                            # Multiple rows - broadcast or use array
+                            if isinstance(col_val, (list, pl.Series)) and len(
+                                col_val
+                            ) == len(row_indices):
+                                when_expr = pl.col(col_name)
+                                for row_idx, v in zip(
+                                    row_indices,
+                                    col_val
+                                    if isinstance(col_val, list)
+                                    else list(col_val),
+                                ):
+                                    when_expr = (
+                                        pl.when(pl.int_range(pl.len()) == row_idx)
+                                        .then(pl.lit(v))
+                                        .otherwise(when_expr)
+                                    )
+                                new_cols.append(when_expr.alias(col_name))
+                            else:
+                                # Broadcast scalar
+                                when_expr = pl.col(col_name)
+                                for row_idx in row_indices:
+                                    when_expr = (
+                                        pl.when(pl.int_range(pl.len()) == row_idx)
+                                        .then(pl.lit(col_val))
+                                        .otherwise(when_expr)
+                                    )
+                                new_cols.append(when_expr.alias(col_name))
+                    polars_df = polars_df.with_columns(new_cols)
+                elif len(row_indices) == 1 and len(value_list) == 1:
+                    # Single row, single value - broadcast to all columns
+                    new_cols = []
+                    for col_name in polars_df.columns:
+                        new_cols.append(
+                            pl.when(pl.int_range(pl.len()) == row_indices[0])
+                            .then(pl.lit(value_list[0]))
+                            .otherwise(pl.col(col_name))
+                            .alias(col_name)
+                        )
+                    polars_df = polars_df.with_columns(new_cols)
+                else:
+                    raise ValueError(
+                        f"Cannot assign value of length {len(value_list)} to {len(row_indices)} row(s) with {len(polars_df.columns)} columns"
+                    )
+            except (TypeError, AttributeError):
+                # Not iterable in expected way - treat as scalar
+                new_cols = []
+                for col_name in polars_df.columns:
+                    if len(row_indices) == 1:
+                        new_cols.append(
+                            pl.when(pl.int_range(pl.len()) == row_indices[0])
+                            .then(pl.lit(value))
+                            .otherwise(pl.col(col_name))
+                            .alias(col_name)
+                        )
+                    else:
+                        when_expr = pl.col(col_name)
+                        for row_idx in row_indices:
+                            when_expr = (
+                                pl.when(pl.int_range(pl.len()) == row_idx)
+                                .then(pl.lit(value))
+                                .otherwise(when_expr)
+                            )
+                        new_cols.append(when_expr.alias(col_name))
+                polars_df = polars_df.with_columns(new_cols)
+        else:
+            # Scalar value - broadcast to all columns
+            new_cols = []
+            for col_name in polars_df.columns:
+                if len(row_indices) == 1:
+                    new_cols.append(
+                        pl.when(pl.int_range(pl.len()) == row_indices[0])
+                        .then(pl.lit(value))
+                        .otherwise(pl.col(col_name))
+                        .alias(col_name)
+                    )
+                else:
+                    # Broadcast scalar to multiple rows
+                    when_expr = pl.col(col_name)
+                    for row_idx in row_indices:
+                        when_expr = (
+                            pl.when(pl.int_range(pl.len()) == row_idx)
+                            .then(pl.lit(value))
+                            .otherwise(when_expr)
+                        )
+                    new_cols.append(when_expr.alias(col_name))
+            polars_df = polars_df.with_columns(new_cols)
+
+        self._df._df = polars_df
+        # Index preserved automatically (no shape change)
 
     def _set_rows_cols(self, row_key: Any, col_key: Any, value: Any) -> None:
         """Set rows and columns by label."""
-        # Convert to pandas for label-based indexing
-        pd_df = self._df.to_pandas()
+        polars_df = self._df._df
+        import polars as pl
 
-        # Set the index if we have a stored index
-        if self._df._index is not None:
-            pd_df.index = self._df._index
+        from polarpandas._exceptions import create_keyerror_with_suggestions
 
-        pd_df.loc[row_key, col_key] = value
-        self._df._df = pl.from_pandas(pd_df)
-        # Preserve the index after assignment
-        self._df._index = pd_df.index.tolist()
-        if hasattr(pd_df.index, "name"):
-            index_name_val = pd_df.index.name
-            self._df._index_name = index_name_val
+        # Handle boolean indexing with pandas Series
+        if hasattr(row_key, "dtype") and str(row_key.dtype) == "bool":
+            # Convert pandas Series mask to Polars Series for efficient boolean indexing
+            if hasattr(row_key, "tolist"):
+                mask_values = row_key.tolist()
+            else:
+                mask_values = list(row_key)
+
+            # Validate mask length
+            if len(mask_values) != len(polars_df):
+                raise ValueError(
+                    f"Length of values ({len(mask_values)}) does not match length of index ({len(polars_df)})"
+                )
+
+            # Handle column key first
+            if isinstance(col_key, slice):
+                start = col_key.start if col_key.start is not None else 0
+                stop = (
+                    col_key.stop if col_key.stop is not None else len(polars_df.columns)
+                )
+                step = col_key.step if col_key.step is not None else 1
+                col_keys = list(range(start, stop, step))
+                col_names = [
+                    polars_df.columns[c]
+                    if isinstance(c, int) and 0 <= c < len(polars_df.columns)
+                    else c
+                    for c in col_keys
+                ]
+            elif isinstance(col_key, list):
+                col_names = []
+                for c in col_key:
+                    if isinstance(c, int):
+                        if c < 0:
+                            c = len(polars_df.columns) + c
+                        if c >= len(polars_df.columns) or c < 0:
+                            raise IndexError(f"index {c} is out of bounds for axis 1")
+                        col_names.append(polars_df.columns[c])
+                    else:
+                        if c not in polars_df.columns:
+                            from polarpandas._exceptions import (
+                                create_keyerror_with_suggestions,
+                            )
+
+                            raise create_keyerror_with_suggestions(
+                                c, polars_df.columns, context="column"
+                            )
+                        col_names.append(c)
+            elif isinstance(col_key, int):
+                col_key_int = col_key
+                if col_key_int < 0:
+                    col_key_int = len(polars_df.columns) + col_key_int
+                if col_key_int >= len(polars_df.columns) or col_key_int < 0:
+                    raise IndexError(
+                        f"index {col_key_int} is out of bounds for axis 1 with size {len(polars_df.columns)}"
+                    )
+                col_names = [polars_df.columns[col_key_int]]
+            else:
+                # String column name
+                if col_key not in polars_df.columns:
+                    from polarpandas._exceptions import create_keyerror_with_suggestions
+
+                    raise create_keyerror_with_suggestions(
+                        col_key, polars_df.columns, context="column"
+                    )
+                col_names = [col_key]
+
+            # Convert mask to Polars Series for efficient operations
+            mask_series = pl.Series("mask", mask_values)
+
+            # Use Polars native boolean indexing instead of nested when chains
+            # This is much more efficient than building row_indices list
+            new_cols = []
+            for col_name in col_names:
+                if col_name in polars_df.columns:
+                    # Use Polars when() with boolean mask directly
+                    new_cols.append(
+                        pl.when(mask_series)
+                        .then(pl.lit(value))
+                        .otherwise(pl.col(col_name))
+                        .alias(col_name)
+                    )
+                else:
+                    # New column
+                    new_cols.append(
+                        pl.when(mask_series)
+                        .then(pl.lit(value))
+                        .otherwise(pl.lit(None))
+                        .alias(col_name)
+                    )
+
+            self._df._df = polars_df.with_columns(new_cols)
+            # Index preserved automatically (no shape change)
+            return
+        elif self._df._index is not None:
+            # We have an index - convert labels to positions
+            # Handle pandas fallback: if integer not in index and index is not integer-based, use position
+            is_integer_index = (
+                all(
+                    isinstance(k, (int, type(None)))
+                    for k in self._df._index[:10]
+                    if k is not None
+                )
+                if self._df._index
+                else False
+            )
+
+            if isinstance(row_key, slice):
+                # Slice of labels - convert to list of positions
+                start = row_key.start
+                stop = row_key.stop
+                step = row_key.step if row_key.step is not None else 1
+
+                # Find start position
+                if start is None:
+                    start_pos = 0
+                else:
+                    try:
+                        start_pos = self._df._index.index(start)
+                    except ValueError as err:
+                        # Pandas fallback for integer slices
+                        if isinstance(start, int) and not is_integer_index:
+                            start_pos = start if start >= 0 else len(polars_df) + start
+                        else:
+                            raise create_keyerror_with_suggestions(
+                                str(start),
+                                [str(k) for k in self._df._index],
+                                context="index",
+                            ) from err
+
+                # Find stop position
+                if stop is None:
+                    stop_pos = len(self._df._index)
+                else:
+                    try:
+                        stop_pos = (
+                            self._df._index.index(stop) + 1
+                        )  # +1 because slice is exclusive
+                    except ValueError as err:
+                        # Pandas fallback for integer slices
+                        if isinstance(stop, int) and not is_integer_index:
+                            stop_pos = (
+                                stop if stop >= 0 else len(polars_df) + stop
+                            ) + 1
+                        else:
+                            raise create_keyerror_with_suggestions(
+                                str(stop),
+                                [str(k) for k in self._df._index],
+                                context="index",
+                            ) from err
+
+                row_indices = list(range(start_pos, stop_pos, step))
+            elif isinstance(row_key, list):
+                # List of labels - convert each to position
+                row_indices = []
+                for label in row_key:
+                    try:
+                        row_indices.append(self._df._index.index(label))
+                    except ValueError as err:
+                        # Pandas fallback: if integer not found and index is not integer-based, use as position
+                        if isinstance(label, int) and not is_integer_index:
+                            label_pos = label if label >= 0 else len(polars_df) + label
+                            if 0 <= label_pos < len(polars_df):
+                                row_indices.append(label_pos)
+                            else:
+                                raise IndexError(
+                                    f"index {label_pos} is out of bounds"
+                                ) from err
+                        else:
+                            raise create_keyerror_with_suggestions(
+                                str(label),
+                                [str(k) for k in self._df._index],
+                                context="index",
+                            ) from err
+            else:
+                # Single label - convert to position
+                try:
+                    row_idx = self._df._index.index(row_key)
+                    row_indices = [row_idx]
+                except ValueError as err:
+                    # Pandas fallback: if integer not found and index is not integer-based, create new row
+                    if isinstance(row_key, int) and not is_integer_index:
+                        # Pandas creates a new row with this label when assigning
+                        # Add the new label to the index and create a new row
+                        if self._df._index is None:
+                            self._df._index = []
+                        self._df._index.append(row_key)  # type: ignore[misc]  # mypy doesn't understand this is reachable after None check
+                        # Create a new row with NaN for all columns (pandas behavior)
+                        # First, cast integer columns to float to allow NaN (matching pandas behavior)
+                        cast_exprs = []
+                        new_row_data_cast: Dict[str, Any] = {}
+                        for col in polars_df.columns:
+                            dtype = polars_df[col].dtype
+                            if dtype in (
+                                pl.Int8,
+                                pl.Int16,
+                                pl.Int32,
+                                pl.Int64,
+                                pl.UInt8,
+                                pl.UInt16,
+                                pl.UInt32,
+                                pl.UInt64,
+                            ):
+                                cast_exprs.append(
+                                    pl.col(col).cast(pl.Float64).alias(col)
+                                )
+                                new_row_data_cast[col] = float("nan")
+                            elif dtype in (pl.Float32, pl.Float64):
+                                new_row_data_cast[col] = float("nan")
+                            else:
+                                # String and other types use None
+                                new_row_data_cast[col] = None
+
+                        if cast_exprs:
+                            polars_df = polars_df.with_columns(cast_exprs)
+                        new_row_df = pl.DataFrame([new_row_data_cast])
+                        polars_df = pl.concat([polars_df, new_row_df])
+                        self._df._df = polars_df
+                        row_indices = [len(polars_df) - 1]
+                    else:
+                        raise create_keyerror_with_suggestions(
+                            str(row_key),
+                            [str(k) for k in self._df._index],
+                            context="index",
+                        ) from err
+        else:
+            # No index - treat row_key as integer position
+            # For loc, if index doesn't exist, pandas creates new row with that label
+            if isinstance(row_key, slice):
+                start = row_key.start if row_key.start is not None else 0
+                stop = row_key.stop if row_key.stop is not None else len(polars_df)
+                step = row_key.step if row_key.step is not None else 1
+                row_indices = list(range(start, stop, step))
+            elif isinstance(row_key, list):
+                row_indices = row_key
+            else:
+                row_key_int = row_key
+                if isinstance(row_key_int, int) and row_key_int < 0:
+                    row_key_int = len(polars_df) + row_key_int
+                # Pandas loc creates new row if index doesn't exist (unlike iloc which raises)
+                if row_key_int >= len(polars_df) or row_key_int < 0:
+                    # Create new row with this integer as the label
+                    if self._df._index is None:
+                        # Initialize index with current row positions
+                        self._df._index = list(range(len(polars_df)))
+                    # Add the new label to the index (pandas creates one new row)
+                    self._df._index.append(row_key_int)
+                    # Create the new row
+                    cast_exprs = []
+                    new_row_data_no_index: Dict[str, Any] = {}
+                    for col in polars_df.columns:
+                        dtype = polars_df[col].dtype
+                        if dtype in (
+                            pl.Int8,
+                            pl.Int16,
+                            pl.Int32,
+                            pl.Int64,
+                            pl.UInt8,
+                            pl.UInt16,
+                            pl.UInt32,
+                            pl.UInt64,
+                        ):
+                            cast_exprs.append(pl.col(col).cast(pl.Float64).alias(col))
+                            new_row_data_no_index[col] = float("nan")
+                        elif dtype in (pl.Float32, pl.Float64):
+                            new_row_data_no_index[col] = float("nan")
+                        else:
+                            new_row_data_no_index[col] = None
+
+                    if cast_exprs:
+                        polars_df = polars_df.with_columns(cast_exprs)
+
+                    new_row_df = pl.DataFrame([new_row_data_no_index])
+                    polars_df = pl.concat([polars_df, new_row_df])
+                    self._df._df = polars_df
+                    row_indices = [len(polars_df) - 1]
+                else:
+                    row_indices = [row_key_int]
+
+        # Handle column key (same as _ILocIndexer)
+        if isinstance(col_key, slice):
+            # Convert slice to list of column indices/names
+            start = col_key.start if col_key.start is not None else 0
+            stop = col_key.stop if col_key.stop is not None else len(polars_df.columns)
+            step = col_key.step if col_key.step is not None else 1
+            col_keys = list(range(start, stop, step))
+            col_names = [
+                polars_df.columns[c]
+                if isinstance(c, int) and 0 <= c < len(polars_df.columns)
+                else c
+                for c in col_keys
+            ]
+        elif isinstance(col_key, list):
+            col_names = []
+            for c in col_key:
+                if isinstance(c, int):
+                    if c < 0:
+                        c = len(polars_df.columns) + c
+                    if c >= len(polars_df.columns) or c < 0:
+                        raise IndexError(f"index {c} is out of bounds for axis 1")
+                    col_names.append(polars_df.columns[c])
+                else:
+                    if c not in polars_df.columns:
+                        raise create_keyerror_with_suggestions(
+                            c, polars_df.columns, context="column"
+                        )
+                    col_names.append(c)
+        elif isinstance(col_key, int):
+            # Handle negative column indices
+            col_key_int = col_key
+            if col_key_int < 0:
+                col_key_int = len(polars_df.columns) + col_key_int
+
+            # Validate column bounds
+            if col_key_int >= len(polars_df.columns) or col_key_int < 0:
+                raise IndexError(
+                    f"index {col_key_int} is out of bounds for axis 1 with size {len(polars_df.columns)}"
+                )
+
+            col_names = [polars_df.columns[col_key_int]]
+        else:
+            # String column name
+            if col_key not in polars_df.columns:
+                raise create_keyerror_with_suggestions(
+                    col_key, polars_df.columns, context="column"
+                )
+            col_names = [col_key]
+
+        # Update each column using conditional expressions (same pattern as _ILocIndexer)
+        new_cols = []
+        for col_name in col_names:
+            if col_name in polars_df.columns:
+                # Existing column - update using conditional
+                if len(row_indices) == 1:
+                    # Single row update
+                    new_cols.append(
+                        pl.when(pl.int_range(pl.len()) == row_indices[0])
+                        .then(pl.lit(value))
+                        .otherwise(pl.col(col_name))
+                        .alias(col_name)
+                    )
+                else:
+                    # Multiple rows - need to handle value as array
+                    if isinstance(value, (list, pl.Series)) and len(value) == len(
+                        row_indices
+                    ):
+                        # Value matches number of rows - map each row index to corresponding value
+                        value_series = (
+                            pl.Series(value)
+                            if not isinstance(value, pl.Series)
+                            else value
+                        )
+                        # Build when chain for multiple row updates
+                        when_expr = pl.col(col_name)
+                        for row_idx, val in zip(
+                            row_indices,
+                            value if isinstance(value, list) else list(value_series),
+                        ):
+                            when_expr = (
+                                pl.when(pl.int_range(pl.len()) == row_idx)
+                                .then(pl.lit(val))
+                                .otherwise(when_expr)
+                            )
+                        new_cols.append(when_expr.alias(col_name))
+                    else:
+                        # Broadcast scalar to all selected rows
+                        when_expr = pl.col(col_name)
+                        for row_idx in row_indices:
+                            when_expr = (
+                                pl.when(pl.int_range(pl.len()) == row_idx)
+                                .then(pl.lit(value))
+                                .otherwise(when_expr)
+                            )
+                        new_cols.append(when_expr.alias(col_name))
+            else:
+                # New column - create with None/default and set value
+                if len(row_indices) == 1:
+                    new_cols.append(
+                        pl.when(pl.int_range(pl.len()) == row_indices[0])
+                        .then(pl.lit(value))
+                        .otherwise(pl.lit(None))
+                        .alias(col_name)
+                    )
+                else:
+                    # Multiple rows - broadcast scalar or use array
+                    when_expr = pl.lit(None)
+                    for row_idx in row_indices:
+                        when_expr = (
+                            pl.when(pl.int_range(pl.len()) == row_idx)
+                            .then(pl.lit(value))
+                            .otherwise(when_expr)
+                        )
+                    new_cols.append(when_expr.alias(col_name))
+
+        self._df._df = polars_df.with_columns(new_cols)
+        # Index preserved automatically (no shape change)
 
 
 class _ILocIndexer:
@@ -3175,25 +3975,333 @@ class _ILocIndexer:
 
     def _set_rows(self, row_key: Any, value: Any) -> None:
         """Set rows by integer position."""
-        # Convert to pandas for integer-based indexing
-        pd_df = self._df.to_pandas()
-        pd_df.iloc[row_key] = value
-        self._df._df = pl.from_pandas(pd_df)
-        # Preserve index after assignment
-        self._df._index = pd_df.index.tolist()
-        if hasattr(pd_df.index, "name"):
-            self._df._index_name = pd_df.index.name
+        polars_df = self._df._df
+        import polars as pl
+
+        # Handle row key (int, slice, or list)
+        if isinstance(row_key, slice):
+            # Convert slice to list of indices
+            start = row_key.start if row_key.start is not None else 0
+            stop = row_key.stop if row_key.stop is not None else len(polars_df)
+            step = row_key.step if row_key.step is not None else 1
+            row_indices = list(range(start, stop, step))
+        elif isinstance(row_key, list):
+            row_indices = row_key
+        else:
+            # Single row
+            row_key_int = row_key
+            # Handle negative indices
+            if isinstance(row_key_int, int) and row_key_int < 0:
+                row_key_int = len(polars_df) + row_key_int
+
+            # Validate row bounds
+            if row_key_int >= len(polars_df) or row_key_int < 0:
+                raise IndexError(
+                    f"index {row_key_int} is out of bounds for axis 0 with size {len(polars_df)}"
+                )
+            row_indices = [row_key_int]
+
+        # Handle value types
+        if isinstance(value, dict):
+            # Dict: update matching columns
+            new_cols = []
+            for col_name in polars_df.columns:
+                if col_name in value:
+                    # Column in dict - update rows
+                    if len(row_indices) == 1:
+                        new_cols.append(
+                            pl.when(pl.int_range(pl.len()) == row_indices[0])
+                            .then(pl.lit(value[col_name]))
+                            .otherwise(pl.col(col_name))
+                            .alias(col_name)
+                        )
+                    else:
+                        # Multiple rows - broadcast value or use list
+                        val = value[col_name]
+                        if isinstance(val, (list, pl.Series)) and len(val) == len(
+                            row_indices
+                        ):
+                            when_expr = pl.col(col_name)
+                            for row_idx, v in zip(
+                                row_indices, val if isinstance(val, list) else list(val)
+                            ):
+                                when_expr = (
+                                    pl.when(pl.int_range(pl.len()) == row_idx)
+                                    .then(pl.lit(v))
+                                    .otherwise(when_expr)
+                                )
+                            new_cols.append(when_expr.alias(col_name))
+                        else:
+                            # Broadcast scalar
+                            when_expr = pl.col(col_name)
+                            for row_idx in row_indices:
+                                when_expr = (
+                                    pl.when(pl.int_range(pl.len()) == row_idx)
+                                    .then(pl.lit(val))
+                                    .otherwise(when_expr)
+                                )
+                            new_cols.append(when_expr.alias(col_name))
+                else:
+                    # Column not in dict - keep original
+                    new_cols.append(pl.col(col_name))
+            polars_df = polars_df.with_columns(new_cols)
+        elif hasattr(value, "__iter__") and not isinstance(value, str):
+            # List, Series, or array-like
+            try:
+                import polarpandas as ppd
+
+                if isinstance(value, ppd.Series):
+                    # PolarPandas Series - extract values
+                    value_list = value.to_list()
+                elif isinstance(value, pl.Series):
+                    value_list = value.to_list()
+                else:
+                    value_list = list(value)
+
+                # Match columns in order
+                if len(value_list) == len(polars_df.columns):
+                    # Value matches number of columns - update each column
+                    new_cols = []
+                    for i, col_name in enumerate(polars_df.columns):
+                        col_val = value_list[i]
+                        if len(row_indices) == 1:
+                            new_cols.append(
+                                pl.when(pl.int_range(pl.len()) == row_indices[0])
+                                .then(pl.lit(col_val))
+                                .otherwise(pl.col(col_name))
+                                .alias(col_name)
+                            )
+                        else:
+                            # Multiple rows - broadcast or use array
+                            if isinstance(col_val, (list, pl.Series)) and len(
+                                col_val
+                            ) == len(row_indices):
+                                when_expr = pl.col(col_name)
+                                for row_idx, v in zip(
+                                    row_indices,
+                                    col_val
+                                    if isinstance(col_val, list)
+                                    else list(col_val),
+                                ):
+                                    when_expr = (
+                                        pl.when(pl.int_range(pl.len()) == row_idx)
+                                        .then(pl.lit(v))
+                                        .otherwise(when_expr)
+                                    )
+                                new_cols.append(when_expr.alias(col_name))
+                            else:
+                                # Broadcast scalar
+                                when_expr = pl.col(col_name)
+                                for row_idx in row_indices:
+                                    when_expr = (
+                                        pl.when(pl.int_range(pl.len()) == row_idx)
+                                        .then(pl.lit(col_val))
+                                        .otherwise(when_expr)
+                                    )
+                                new_cols.append(when_expr.alias(col_name))
+                    polars_df = polars_df.with_columns(new_cols)
+                elif len(row_indices) == 1 and len(value_list) == 1:
+                    # Single row, single value - broadcast to all columns
+                    new_cols = []
+                    for col_name in polars_df.columns:
+                        new_cols.append(
+                            pl.when(pl.int_range(pl.len()) == row_indices[0])
+                            .then(pl.lit(value_list[0]))
+                            .otherwise(pl.col(col_name))
+                            .alias(col_name)
+                        )
+                    polars_df = polars_df.with_columns(new_cols)
+                else:
+                    raise ValueError(
+                        f"Cannot assign value of length {len(value_list)} to {len(row_indices)} row(s) with {len(polars_df.columns)} columns"
+                    )
+            except (TypeError, AttributeError):
+                # Not iterable in expected way - treat as scalar
+                new_cols = []
+                for col_name in polars_df.columns:
+                    if len(row_indices) == 1:
+                        new_cols.append(
+                            pl.when(pl.int_range(pl.len()) == row_indices[0])
+                            .then(pl.lit(value))
+                            .otherwise(pl.col(col_name))
+                            .alias(col_name)
+                        )
+                    else:
+                        when_expr = pl.col(col_name)
+                        for row_idx in row_indices:
+                            when_expr = (
+                                pl.when(pl.int_range(pl.len()) == row_idx)
+                                .then(pl.lit(value))
+                                .otherwise(when_expr)
+                            )
+                        new_cols.append(when_expr.alias(col_name))
+                polars_df = polars_df.with_columns(new_cols)
+        else:
+            # Scalar value - broadcast to all columns
+            new_cols = []
+            for col_name in polars_df.columns:
+                if len(row_indices) == 1:
+                    new_cols.append(
+                        pl.when(pl.int_range(pl.len()) == row_indices[0])
+                        .then(pl.lit(value))
+                        .otherwise(pl.col(col_name))
+                        .alias(col_name)
+                    )
+                else:
+                    # Broadcast scalar to multiple rows
+                    when_expr = pl.col(col_name)
+                    for row_idx in row_indices:
+                        when_expr = (
+                            pl.when(pl.int_range(pl.len()) == row_idx)
+                            .then(pl.lit(value))
+                            .otherwise(when_expr)
+                        )
+                    new_cols.append(when_expr.alias(col_name))
+            polars_df = polars_df.with_columns(new_cols)
+
+        self._df._df = polars_df
+        # Index preserved automatically (no shape change)
 
     def _set_rows_cols(self, row_key: Any, col_key: Any, value: Any) -> None:
         """Set rows and columns by integer position."""
-        # Convert to pandas for integer-based indexing
-        pd_df = self._df.to_pandas()
-        pd_df.iloc[row_key, col_key] = value
-        self._df._df = pl.from_pandas(pd_df)
-        # Preserve index after assignment
-        self._df._index = pd_df.index.tolist()
-        if hasattr(pd_df.index, "name"):
-            self._df._index_name = pd_df.index.name
+        polars_df = self._df._df
+        import polars as pl
+
+        # Handle row key (int or slice)
+        if isinstance(row_key, slice):
+            # For slice, we need to update multiple rows
+            # Convert slice to list of indices
+            start = row_key.start if row_key.start is not None else 0
+            stop = row_key.stop if row_key.stop is not None else len(polars_df)
+            step = row_key.step if row_key.step is not None else 1
+            row_indices = list(range(start, stop, step))
+        elif isinstance(row_key, list):
+            row_indices = row_key
+        else:
+            # Single row
+            row_key_int = row_key
+            # Handle negative indices
+            if isinstance(row_key_int, int) and row_key_int < 0:
+                row_key_int = len(polars_df) + row_key_int
+
+            # Validate row bounds
+            if row_key_int >= len(polars_df) or row_key_int < 0:
+                raise IndexError(
+                    f"index {row_key_int} is out of bounds for axis 0 with size {len(polars_df)}"
+                )
+            row_indices = [row_key_int]
+
+        # Handle column key (int, str, list, or slice)
+        if isinstance(col_key, slice):
+            # Convert slice to list of column indices/names
+            start = col_key.start if col_key.start is not None else 0
+            stop = col_key.stop if col_key.stop is not None else len(polars_df.columns)
+            step = col_key.step if col_key.step is not None else 1
+            col_keys = list(range(start, stop, step))
+            col_names = [
+                polars_df.columns[c]
+                if isinstance(c, int) and 0 <= c < len(polars_df.columns)
+                else c
+                for c in col_keys
+            ]
+        elif isinstance(col_key, list):
+            col_names = []
+            for c in col_key:
+                if isinstance(c, int):
+                    if c < 0:
+                        c = len(polars_df.columns) + c
+                    if c >= len(polars_df.columns) or c < 0:
+                        raise IndexError(f"index {c} is out of bounds for axis 1")
+                    col_names.append(polars_df.columns[c])
+                else:
+                    col_names.append(c)
+        elif isinstance(col_key, int):
+            # Handle negative column indices
+            col_key_int = col_key
+            if col_key_int < 0:
+                col_key_int = len(polars_df.columns) + col_key_int
+
+            # Validate column bounds
+            if col_key_int >= len(polars_df.columns) or col_key_int < 0:
+                raise IndexError(
+                    f"index {col_key_int} is out of bounds for axis 1 with size {len(polars_df.columns)}"
+                )
+
+            col_names = [polars_df.columns[col_key_int]]
+        else:
+            # String column name
+            col_names = [col_key]
+
+        # Update each column using conditional expressions
+        new_cols = []
+        for col_name in col_names:
+            if col_name in polars_df.columns:
+                # Existing column - update using conditional
+                if len(row_indices) == 1:
+                    # Single row update
+                    new_cols.append(
+                        pl.when(pl.int_range(pl.len()) == row_indices[0])
+                        .then(pl.lit(value))
+                        .otherwise(pl.col(col_name))
+                        .alias(col_name)
+                    )
+                else:
+                    # Multiple rows - need to handle value as array
+                    # For now, broadcast scalar to all selected rows
+                    # If value is a list/array, it should match length of row_indices
+                    if isinstance(value, (list, pl.Series)) and len(value) == len(
+                        row_indices
+                    ):
+                        # Value matches number of rows - map each row index to corresponding value
+                        value_series = (
+                            pl.Series(value)
+                            if not isinstance(value, pl.Series)
+                            else value
+                        )
+                        # Build when chain for multiple row updates
+                        when_expr = pl.col(col_name)
+                        for row_idx, val in zip(
+                            row_indices,
+                            value if isinstance(value, list) else list(value_series),
+                        ):
+                            when_expr = (
+                                pl.when(pl.int_range(pl.len()) == row_idx)
+                                .then(pl.lit(val))
+                                .otherwise(when_expr)
+                            )
+                        new_cols.append(when_expr.alias(col_name))
+                    else:
+                        # Broadcast scalar to all selected rows
+                        when_expr = pl.col(col_name)
+                        for row_idx in row_indices:
+                            when_expr = (
+                                pl.when(pl.int_range(pl.len()) == row_idx)
+                                .then(pl.lit(value))
+                                .otherwise(when_expr)
+                            )
+                        new_cols.append(when_expr.alias(col_name))
+            else:
+                # New column - create with None/default and set value
+                if len(row_indices) == 1:
+                    new_cols.append(
+                        pl.when(pl.int_range(pl.len()) == row_indices[0])
+                        .then(pl.lit(value))
+                        .otherwise(pl.lit(None))
+                        .alias(col_name)
+                    )
+                else:
+                    # Multiple rows - broadcast scalar or use array
+                    when_expr = pl.lit(None)
+                    for row_idx in row_indices:
+                        when_expr = (
+                            pl.when(pl.int_range(pl.len()) == row_idx)
+                            .then(pl.lit(value))
+                            .otherwise(when_expr)
+                        )
+                    new_cols.append(when_expr.alias(col_name))
+
+        self._df._df = polars_df.with_columns(new_cols)
+        # Index preserved automatically (no shape change)
 
 
 class _AtIndexer:
@@ -3217,6 +4325,12 @@ class _AtIndexer:
                     row_values = polars_df.row(row_idx, named=True)
                     return row_values[col_key]
                 except ValueError as e:
+                    if self._df._index is not None:
+                        raise create_keyerror_with_suggestions(
+                            str(row_key),
+                            [str(k) for k in self._df._index],
+                            context="index",
+                        ) from e
                     raise KeyError(f"'{row_key}' not in index") from e
             else:
                 # No index - use integer position
@@ -3245,6 +4359,12 @@ class _AtIndexer:
                         .alias(col_key)
                     )
                 except ValueError as e:
+                    if self._df._index is not None:
+                        raise create_keyerror_with_suggestions(
+                            str(row_key),
+                            [str(k) for k in self._df._index],
+                            context="index",
+                        ) from e
                     raise KeyError(f"'{row_key}' not in index") from e
             else:
                 # No index - use integer position
@@ -3272,9 +4392,52 @@ class _IAtIndexer:
         """Get single value by integer position."""
         if isinstance(key, tuple) and len(key) == 2:
             row_key, col_key = key
-            # Convert to pandas for integer-based indexing
-            pd_df = self._df.to_pandas()
-            return pd_df.iat[row_key, col_key]
+            polars_df = self._df._df
+            import polars as pl
+
+            # Handle negative indices
+            if isinstance(row_key, int) and row_key < 0:
+                row_key = len(polars_df) + row_key
+
+            # Validate row bounds
+            if row_key >= len(polars_df) or row_key < 0:
+                raise IndexError(
+                    f"index {row_key} is out of bounds for axis 0 with size {len(polars_df)}"
+                )
+
+            # Get row values
+            try:
+                row_values = polars_df.row(row_key, named=True)
+            except (IndexError, pl.exceptions.OutOfBoundsError) as e:
+                raise IndexError(
+                    f"index {row_key} is out of bounds for axis 0 with size {len(polars_df)}"
+                ) from e
+
+            # Handle column key (int or str)
+            if isinstance(col_key, int):
+                # Handle negative column indices
+                if col_key < 0:
+                    col_key = len(polars_df.columns) + col_key
+
+                # Validate column bounds
+                if col_key >= len(polars_df.columns) or col_key < 0:
+                    raise IndexError(
+                        f"index {col_key} is out of bounds for axis 1 with size {len(polars_df.columns)}"
+                    )
+
+                col_name = polars_df.columns[col_key]
+                return row_values[col_name]
+            elif isinstance(col_key, str):
+                # Column name provided
+                if col_key not in polars_df.columns:
+                    from polarpandas._exceptions import create_keyerror_with_suggestions
+
+                    raise create_keyerror_with_suggestions(
+                        col_key, polars_df.columns, context="column"
+                    )
+                return row_values[col_key]
+            else:
+                raise TypeError(f"Column key must be int or str, got {type(col_key)}")
         else:
             raise ValueError("iat accessor requires (row, col) tuple")
 
@@ -3282,14 +4445,51 @@ class _IAtIndexer:
         """Set single value by integer position."""
         if isinstance(key, tuple) and len(key) == 2:
             row_key, col_key = key
-            # Convert to pandas for integer-based indexing
-            pd_df = self._df.to_pandas()
-            pd_df.iat[row_key, col_key] = value
-            self._df._df = pl.from_pandas(pd_df)
-            # Preserve index after assignment
-            self._df._index = pd_df.index.tolist()
-            if hasattr(pd_df.index, "name"):
-                self._df._index_name = pd_df.index.name
+            polars_df = self._df._df
+            import polars as pl
+
+            # Handle negative row indices
+            if isinstance(row_key, int) and row_key < 0:
+                row_key = len(polars_df) + row_key
+
+            # Validate row bounds
+            if row_key >= len(polars_df) or row_key < 0:
+                raise IndexError(
+                    f"index {row_key} is out of bounds for axis 0 with size {len(polars_df)}"
+                )
+
+            # Handle column key (int or str)
+            if isinstance(col_key, int):
+                # Handle negative column indices
+                if col_key < 0:
+                    col_key = len(polars_df.columns) + col_key
+
+                # Validate column bounds
+                if col_key >= len(polars_df.columns) or col_key < 0:
+                    raise IndexError(
+                        f"index {col_key} is out of bounds for axis 1 with size {len(polars_df.columns)}"
+                    )
+
+                col_name = polars_df.columns[col_key]
+            elif isinstance(col_key, str):
+                col_name = col_key
+                if col_name not in polars_df.columns:
+                    from polarpandas._exceptions import create_keyerror_with_suggestions
+
+                    raise create_keyerror_with_suggestions(
+                        col_name, polars_df.columns, context="column"
+                    )
+            else:
+                raise TypeError(f"Column key must be int or str, got {type(col_key)}")
+
+            # Update value using Polars conditional expression (same pattern as _AtIndexer)
+            self._df._df = polars_df.with_columns(
+                pl.when(pl.int_range(pl.len()) == row_key)
+                .then(pl.lit(value))
+                .otherwise(pl.col(col_name))
+                .alias(col_name)
+            )
+            # Index preserved automatically (no shape change)
         else:
             raise ValueError("iat accessor requires (row, col) tuple")
 
@@ -3302,60 +4502,47 @@ class _RollingGroupBy:
         self._window = window
         self._kwargs = kwargs
 
-    def mean(self) -> "DataFrame":
-        """Calculate rolling mean."""
+    def _apply_rolling(self, operation: str) -> "DataFrame":
+        """Apply rolling operation across all columns.
+
+        Parameters
+        ----------
+        operation : str
+            Name of the rolling operation (e.g., 'mean', 'sum', 'std', 'max', 'min')
+
+        Returns
+        -------
+        DataFrame
+            DataFrame with rolling operation applied to all columns
+        """
         result_cols = []
         polars_df = self._df._df
+        rolling_method_name = f"rolling_{operation}"
         for col in self._df.columns:
-            result_cols.append(
-                polars_df[col].rolling_mean(window_size=self._window).alias(col)
-            )
+            rolling_method = getattr(polars_df[col], rolling_method_name)
+            result_cols.append(rolling_method(window_size=self._window).alias(col))
         result_df = polars_df.select(result_cols)
         return DataFrame(result_df)
+
+    def mean(self) -> "DataFrame":
+        """Calculate rolling mean."""
+        return self._apply_rolling("mean")
 
     def sum(self) -> "DataFrame":
         """Calculate rolling sum."""
-        result_cols = []
-        polars_df = self._df._df
-        for col in self._df.columns:
-            result_cols.append(
-                polars_df[col].rolling_sum(window_size=self._window).alias(col)
-            )
-        result_df = polars_df.select(result_cols)
-        return DataFrame(result_df)
+        return self._apply_rolling("sum")
 
     def std(self) -> "DataFrame":
         """Calculate rolling standard deviation."""
-        result_cols = []
-        polars_df = self._df._df
-        for col in self._df.columns:
-            result_cols.append(
-                polars_df[col].rolling_std(window_size=self._window).alias(col)
-            )
-        result_df = polars_df.select(result_cols)
-        return DataFrame(result_df)
+        return self._apply_rolling("std")
 
     def max(self) -> "DataFrame":
         """Calculate rolling maximum."""
-        result_cols = []
-        polars_df = self._df._df
-        for col in self._df.columns:
-            result_cols.append(
-                polars_df[col].rolling_max(window_size=self._window).alias(col)
-            )
-        result_df = polars_df.select(result_cols)
-        return DataFrame(result_df)
+        return self._apply_rolling("max")
 
     def min(self) -> "DataFrame":
         """Calculate rolling minimum."""
-        result_cols = []
-        polars_df = self._df._df
-        for col in self._df.columns:
-            result_cols.append(
-                polars_df[col].rolling_min(window_size=self._window).alias(col)
-            )
-        result_df = polars_df.select(result_cols)
-        return DataFrame(result_df)
+        return self._apply_rolling("min")
 
 
 class _GroupBy:

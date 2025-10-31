@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polarpandas"
-version = "0.3.1"
+version = "0.4.0"
 description = "A pandas-compatible API layer built on top of Polars for high-performance data manipulation"
 readme = "README.md"
 license = {text = "MIT"}
@@ -48,6 +48,9 @@ test = [
     "pytest-cov>=4.0.0",
     "pytest-benchmark>=4.0.0",
     "pandas>=1.5.0",  # Only for testing/comparison
+]
+pandas = [
+    "pandas>=1.5.0",  # Optional: Required only for certain features (to_pandas, loc/iloc setters, etc.)
 ]
 docs = [
     "sphinx>=5.0.0",

@@ -120,7 +120,9 @@ class TestCSVIOComprehensive:
         """Test CSV reading with custom header."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             filepath = f.name
-            pd.DataFrame(self.data).to_csv(filepath, index=False, header=["X", "Y", "Z"])
+            pd.DataFrame(self.data).to_csv(
+                filepath, index=False, header=["X", "Y", "Z"]
+            )
 
             pd_result = pd.read_csv(filepath, names=["X", "Y", "Z"])
             ppd_result = ppd.read_csv(filepath, names=["X", "Y", "Z"])
@@ -277,13 +279,17 @@ class TestCSVIOComprehensive:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             # Test pandas
             filepath = f.name
-            pd.DataFrame(self.data).to_csv(filepath, index=False, header=["X", "Y", "Z"])
+            pd.DataFrame(self.data).to_csv(
+                filepath, index=False, header=["X", "Y", "Z"]
+            )
             pd_result = pd.read_csv(filepath, names=["X", "Y", "Z"])
 
             # Clear file and test polarpandas
             with open(filepath, "w") as f:
                 pass  # Clear the file
-            ppd.DataFrame(self.data).to_csv(filepath, index=False, header=["X", "Y", "Z"])
+            ppd.DataFrame(self.data).to_csv(
+                filepath, index=False, header=["X", "Y", "Z"]
+            )
             ppd_result = ppd.read_csv(filepath, names=["X", "Y", "Z"])
 
             # Compare results
