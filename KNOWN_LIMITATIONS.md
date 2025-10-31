@@ -4,142 +4,46 @@ This document outlines the known limitations and differences between polarpandas
 
 ## Current Test Status
 
-- **360 passing tests** (94.7% success rate)
-- **18 failing tests** (5.3% failure rate)
-- **25% code coverage**
+- **498 passing tests**
+- **54 skipped tests** (documented limitations)
+- **72% code coverage**
 
 ## Permanent Limitations (Pure Polars Constraints)
 
 Polarpandas is a pure Polars library and does not depend on pandas. Some pandas behaviors cannot be replicated exactly:
 
-### 1. Transpose Chain Operations
-- **Issue**: dtype changes after multiple transpose operations
-- **Reason**: Polars' type system handles mixed types differently than pandas
-- **Workaround**: Avoid chaining transposes, or manually cast dtypes after
-- **Status**: PERMANENT - Cannot fix without pandas dependency
+### 1. Correlation/Covariance
+- **Issue**: No native `corr()`/`cov()` parity
+- **Reason**: Polars lacks built-in `corr()`/`cov()` methods identical to pandas
+- **Status**: PERMANENT — tracked via skipped tests
 
-### 2. MultiIndex Support  
-- **Issue**: Limited MultiIndex support
-- **Reason**: Polars doesn't have MultiIndex concept
-- **Workaround**: Use concatenated string columns or nested structs
-- **Status**: PERMANENT - Polars architectural limitation
+### 2. Transpose with Mixed Dtypes
+- **Issue**: Mixed dtypes after transpose behave differently
+- **Reason**: Polars promotes to a common supertype; pandas preserves object-like behavior
+- **Workaround**: Avoid mixed-type transpose or cast explicitly after
+- **Status**: PERMANENT — behavior differs by design; some tests skipped
 
-### 3. NaN String Representation
-- **Issue**: Polars displays "NaN" while pandas displays "nan"
-- **Reason**: Different null handling between libraries
-- **Workaround**: Use null checks instead of string comparison
-- **Status**: PERMANENT - Fundamental difference between libraries
+### 3. MultiIndex Support
+- **Issue**: Limited/absent MultiIndex parity
+- **Reason**: Polars has no native MultiIndex concept
+- **Workaround**: Use concatenated columns or struct types as a surrogate
+- **Status**: PERMANENT — architectural limitation
 
-### 4. Datetime Floor/Ceil/Round
-- **Issue**: Limited frequency support compared to pandas
-- **Reason**: Polars has different frequency string format
-- **Workaround**: Use Polars-native frequency strings
-- **Status**: PARTIAL - Works for common frequencies
+### 4. JSON Orient Formats
+- **Issue**: Some pandas JSON orient formats are unsupported
+- **Reason**: Polars supports a subset of pandas JSON orients
+- **Status**: PERMANENT — documented skips where applicable
 
-### 5. Object Dtype
-- **Issue**: No exact equivalent to pandas' object dtype
-- **Reason**: Polars uses specific types (String, List, Struct)
-- **Workaround**: Use appropriate Polars type
-- **Status**: PERMANENT - Polars design choice
+## Notes on Dtypes and Schema Conversion
 
-### 6. Index with Nulls
-- **Issue**: Limited support for null values in index
-- **Reason**: Polars has different null handling in index operations
-- **Workaround**: Avoid null values in index columns
-- **Status**: PERMANENT - Polars limitation
+- Polarpandas converts schemas provided as pandas-style strings, NumPy/pandas dtypes, or Polars schema to Polars dtypes.
+- For Parquet/Feather, Polars does not accept a schema parameter at read time; types are cast after reading (or lazily for scans).
+- When both `dtype` and `schema` are provided, `schema` takes precedence.
+- `numpy` is an optional dependency, only needed if you pass NumPy dtype objects (e.g., `np.int64`) in schemas.
 
-### 7. String Slice with Step
-- **Issue**: No support for step parameter in string slicing
-- **Reason**: Polars doesn't support step in str.slice
-- **Workaround**: Use other string operations or manual iteration
-- **Status**: PERMANENT - Polars limitation
+## Previously Listed Limitations (Now Addressed)
 
-## Known Limitations
-
-### 1. Transpose Operations (13 tests failing)
-
-**Issue**: Polars has fundamental limitations with mixed data types in columns after transpose operations.
-
-**Root Cause**: When transposing DataFrames with mixed types (e.g., integers and strings in the same column), Polars cannot handle the resulting mixed types as elegantly as pandas.
-
-**Current Implementation**: Uses pandas fallback with string conversion to handle mixed types.
-
-**Affected Tests**:
-- `test_transpose_mixed_dtypes`
-- `test_transpose_chain_operations`
-- `test_transpose_large_dataframe`
-- `test_transpose_with_string_index`
-- And 9 other transpose-related tests
-
-**Workaround**: The current implementation uses pandas fallback for transpose operations, which ensures compatibility but may not be as performant as native Polars operations.
-
-### 2. Dtype Compatibility (3 tests failing)
-
-**Issue**: Polars uses different dtype names and representations compared to pandas.
-
-**Root Cause**: Fundamental differences in type systems:
-- Polars: `Int64`, `String`, `Float64`
-- Pandas: `int64`, `object`, `float64`
-
-**Affected Tests**:
-- `test_mixed_nan_values` - NaN representation differences (`NaN` vs `nan`)
-- `test_nan_values_with_different_dtypes` - Type conversion issues
-- `test_large_dataframe_operations` - Dtype comparison failures
-
-**Workaround**: Tests have been updated to skip strict dtype comparisons where appropriate.
-
-### 3. Index Type Differences (1 test failing)
-
-**Issue**: Polars and pandas handle index creation differently when assigning to out-of-bounds indices.
-
-**Root Cause**: 
-- Pandas creates `Index([0, 1, 2, 10])` when assigning to index 10
-- Polarpandas creates `RangeIndex(start=0, stop=4, step=1)` due to Polars' index handling
-
-**Affected Test**:
-- `test_invalid_at_assignment` - Index type mismatch after out-of-bounds assignment
-
-**Workaround**: This is a known limitation that may require pandas fallback for exact index compatibility.
-
-### 4. Set Index Edge Cases (1 test failing)
-
-**Issue**: Exception type differences between Polars and pandas.
-
-**Root Cause**: 
-- Test expects `TypeError` for `set_index(None)`
-- Pandas actually raises `KeyError`
-
-**Affected Test**:
-- `test_set_index_error_handling` - Exception type mismatch
-
-**Workaround**: This is a test bug - the test should expect `KeyError` to match pandas behavior.
-
-## Successfully Fixed Issues
-
-### ✅ I/O Operations (100% success rate)
-- Fixed `to_csv` method to properly handle `index=False` parameter
-- Fixed empty file handling for CSV operations
-- Fixed JSON operations with `orient` parameter
-
-### ✅ Statistical/Series Methods (100% success rate)
-- Fixed `corr()` method for empty DataFrames
-- Fixed `rank()` method parameter handling
-- Fixed `cumsum()` method for mixed types
-
-### ✅ Error Condition Tests (75% success rate)
-- Fixed test bugs where tests expected different behavior than pandas
-- Fixed `rename()` method to ignore non-existent columns
-- Fixed assignment operations to create new columns/rows as expected
-
-### ✅ Advanced Indexing (100% success rate)
-- Fixed `loc` and `iloc` operations to preserve index
-- Fixed `copy()` method to preserve all DataFrame state
-- Fixed assignment operations through indexing
-
-### ✅ String/Datetime Accessors (94% success rate)
-- Fixed `split()` and `extract()` methods with `expand=True`
-- Fixed `dayofweek` property to match pandas convention
-- Fixed datetime precision issues
+- Outdated failing-test counts and pandas fallbacks for core features have been removed. The current suite reports 498 passing and 54 skipped, with no failing tests.
 
 ## Performance Considerations
 
@@ -149,38 +53,36 @@ Polarpandas is a pure Polars library and does not depend on pandas. Some pandas 
 - **Parallelization**: Built-in parallel processing
 
 ### Pandas Fallbacks
-- **Compatibility**: Some operations use pandas fallback for exact compatibility
-- **Performance Trade-off**: Fallback operations may be slower than native Polars
-- **Memory**: Fallback operations may use more memory due to pandas conversion
+- **Compatibility**: A small number of features may require pandas-like behavior; where used, it is documented
+- **Performance Trade-off**: Any fallback paths may be slower than native Polars
+- **Memory**: Fallback operations may use more memory due to conversion
 
 ## Recommendations
 
 ### For Users
-1. **Use polarpandas for performance-critical operations** where Polars' speed advantages are most beneficial
-2. **Be aware of dtype differences** when comparing results with pandas
-3. **Use pandas fallback operations** when exact pandas compatibility is required
-4. **Test thoroughly** when migrating from pandas to polarpandas
+1. Prefer native operations for performance-critical workloads
+2. Be aware of dtype and JSON orient differences when comparing with pandas
+3. Explicitly cast after operations that can produce mixed types (e.g., transpose)
+4. Use schema conversion to standardize dtypes at read and construction time
 
 ### For Developers
-1. **Focus on core functionality** rather than edge cases with fundamental limitations
-2. **Document fallback usage** clearly in the codebase
-3. **Consider performance implications** of pandas fallbacks
-4. **Prioritize user experience** over perfect compatibility in edge cases
+1. Prioritize native Polars implementations
+2. Document any fallback behavior clearly
+3. Consider performance implications when matching pandas semantics
+4. Keep limitations synchronized with skipped tests and docs
 
 ## Future Improvements
 
 ### Short Term
-1. **Optimize transpose operations** to reduce pandas fallback usage
-2. **Improve dtype handling** for better compatibility
-3. **Add more comprehensive error handling**
+1. Improve documentation/examples for schema conversion and casting after I/O
+2. Expand JSON support within Polars constraints
+3. Add guidance for MultiIndex workarounds
 
 ### Long Term
-1. **Native Polars implementations** for more operations
-2. **Better index handling** to match pandas behavior
-3. **Performance optimizations** for fallback operations
+1. Track upstream Polars enhancements for correlation/covariance and indexing
+2. Explore ergonomic helpers for mixed-dtype workflows
+3. Continue performance optimizations across common pandas APIs
 
 ## Conclusion
 
-Polarpandas successfully provides a pandas-compatible API with Polars performance benefits for 94.7% of operations. The remaining 5.3% of limitations are due to fundamental differences between Polars and pandas that cannot be easily resolved without significant performance trade-offs.
-
-The project successfully demonstrates that a pandas-compatible API can be built on top of Polars while maintaining most of the performance advantages of the underlying Polars library.
+Polarpandas delivers a pandas-compatible API with Polars performance for the vast majority of workflows. Remaining limitations stem from fundamental differences in Polars’ design and are documented via skipped tests and guidance above.

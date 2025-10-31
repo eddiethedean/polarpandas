@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polarpandas"
-version = "0.4.0"
+version = "0.5.0"
 description = "A pandas-compatible API layer built on top of Polars for high-performance data manipulation"
 readme = "README.md"
 license = {text = "MIT"}
@@ -48,9 +48,13 @@ test = [
     "pytest-cov>=4.0.0",
     "pytest-benchmark>=4.0.0",
     "pandas>=1.5.0",  # Only for testing/comparison
+    "numpy>=1.20.0",  # Required for schema conversion tests
 ]
 pandas = [
     "pandas>=1.5.0",  # Optional: Required only for certain features (to_pandas, loc/iloc setters, etc.)
+]
+numpy = [
+    "numpy>=1.20.0",  # Optional: Required for using numpy dtype objects in schema conversion (e.g., np.int64, np.float64)
 ]
 docs = [
     "sphinx>=5.0.0",

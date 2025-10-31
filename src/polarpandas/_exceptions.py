@@ -143,7 +143,7 @@ def convert_polars_exception(
 
     # Check if it's a column/key not found error
     if "not found" in error_str or "ColumnNotFoundError" in exception_type_str:
-        return target_type(str(e))  # type: ignore[return-value]
+        return target_type(str(e))
 
     # Re-raise original exception if no conversion needed
     return e  # type: ignore[return-value]

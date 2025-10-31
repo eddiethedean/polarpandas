@@ -46,6 +46,7 @@ from polarpandas._exceptions import (
 )
 from polarpandas._index_manager import IndexManager
 from polarpandas.index import Index
+from polarpandas.utils import convert_schema_to_polars
 
 if TYPE_CHECKING:
     from .lazyframe import LazyFrame
@@ -143,6 +144,12 @@ class DataFrame:
             length as data rows. Stored separately for pandas compatibility.
         columns : array-like, optional
             Column names for empty DataFrame. Ignored if data is provided.
+        dtype : dict, pl.Schema, or None, optional
+            Schema specification for columns. Can be:
+            - Pandas-style dict with string dtype names: {"col1": "int64", "col2": "float64"}
+            - Pandas-style dict with dtype objects: {"col1": np.int64, "col2": np.float64}
+            - Polars schema dict: {"col1": pl.Int64, "col2": pl.Float64}
+            - Polars Schema object
         strict : bool, default True
             Whether to use strict mode for Polars DataFrame creation.
         **kwargs
@@ -170,6 +177,7 @@ class DataFrame:
             # Handle columns and index parameters for empty DataFrame
             columns = kwargs.pop("columns", None)
             index = kwargs.pop("index", None)
+            dtype = kwargs.pop("dtype", None)
 
             if index is not None and columns is not None:
                 # Create empty DataFrame with specified columns and index
@@ -197,15 +205,18 @@ class DataFrame:
             self._df = data.collect()
             self._index = kwargs.pop("index", None)
             self._index_name = kwargs.pop("index_name", None)
+            dtype = kwargs.pop("dtype", None)
         elif isinstance(data, pl.DataFrame):
             # Use DataFrame directly
             self._df = data
             self._index = kwargs.pop("index", None)
             self._index_name = kwargs.pop("index_name", None)
+            dtype = kwargs.pop("dtype", None)
         else:
             # Handle index and columns parameters separately since Polars doesn't support them directly
             index = kwargs.pop("index", None)
             columns = kwargs.pop("columns", None)
+            dtype = kwargs.pop("dtype", None)
             strict = kwargs.pop("strict", True)
 
             # Create DataFrame with data
@@ -248,6 +259,19 @@ class DataFrame:
                 self._index_name = None
                 self._columns_index = None
 
+        # Apply dtype/schema conversion if provided
+        if dtype is not None:
+            polars_schema = convert_schema_to_polars(dtype)
+            if polars_schema:
+                # Cast columns to specified types
+                cast_expressions = [
+                    pl.col(col).cast(dtype_val)
+                    for col, dtype_val in polars_schema.items()
+                    if col in self._df.columns
+                ]
+                if cast_expressions:
+                    self._df = self._df.with_columns(cast_expressions)
+
     def lazy(self) -> "LazyFrame":
         """
         Convert DataFrame to LazyFrame for lazy execution.
@@ -288,6 +312,11 @@ class DataFrame:
         ----------
         path : str
             Path to CSV file
+        dtype : dict, pl.Schema, or None, optional
+            Schema specification for columns. Can be pandas-style dict or Polars schema.
+            See DataFrame constructor for details.
+        schema : dict, pl.Schema, or None, optional
+            Direct Polars schema specification (alternative to dtype).
         **kwargs
             Additional arguments passed to Polars read_csv()
 
@@ -297,10 +326,23 @@ class DataFrame:
             DataFrame loaded from CSV
         """
         # Map pandas-style parameters to Polars equivalents
-        polars_kwargs = {}
+        polars_kwargs: Dict[str, Any] = {}
 
         # Handle pandas-specific parameters
         index_col = kwargs.pop("index_col", None)
+
+        # Handle dtype/schema parameters
+        dtype = kwargs.pop("dtype", None)
+        schema = kwargs.pop("schema", None)
+
+        # If both are provided, schema takes precedence
+        schema_to_use = schema if schema is not None else dtype
+
+        if schema_to_use is not None:
+            polars_schema = convert_schema_to_polars(schema_to_use)
+            if polars_schema is not None:
+                # Convert to Polars Schema object for read_csv
+                polars_kwargs["schema"] = polars_schema
 
         if "sep" in kwargs:
             polars_kwargs["separator"] = kwargs.pop("sep")
@@ -379,6 +421,11 @@ class DataFrame:
         ----------
         path : str
             Path to Parquet file
+        dtype : dict, pl.Schema, or None, optional
+            Schema specification for columns. Can be pandas-style dict or Polars schema.
+            See DataFrame constructor for details.
+        schema : dict, pl.Schema, or None, optional
+            Direct Polars schema specification (alternative to dtype).
         **kwargs
             Additional arguments passed to Polars read_parquet()
 
@@ -387,8 +434,30 @@ class DataFrame:
         DataFrame
             DataFrame loaded from Parquet
         """
+        # Handle dtype/schema parameters
+        dtype = kwargs.pop("dtype", None)
+        schema = kwargs.pop("schema", None)
+
+        # If both are provided, schema takes precedence
+        schema_to_use = schema if schema is not None else dtype
+
         # Use eager reading as per user requirements
+        # Note: Parquet files don't support schema parameter, so we read first then cast
         pl_df = pl.read_parquet(path, **kwargs)
+
+        # Apply schema conversion if provided (cast after reading)
+        if schema_to_use is not None:
+            polars_schema = convert_schema_to_polars(schema_to_use)
+            if polars_schema is not None:
+                # Cast columns to specified types
+                cast_expressions = [
+                    pl.col(col).cast(dtype_val)
+                    for col, dtype_val in polars_schema.items()
+                    if col in pl_df.columns
+                ]
+                if cast_expressions:
+                    pl_df = pl_df.with_columns(cast_expressions)
+
         return cls(pl_df)
 
     @classmethod
@@ -400,6 +469,11 @@ class DataFrame:
         ----------
         path : str
             Path to JSON file
+        dtype : dict, pl.Schema, or None, optional
+            Schema specification for columns. Can be pandas-style dict or Polars schema.
+            See DataFrame constructor for details.
+        schema : dict, pl.Schema, or None, optional
+            Direct Polars schema specification (alternative to dtype).
         **kwargs
             Additional arguments passed to Polars read_json()
 
@@ -409,13 +483,25 @@ class DataFrame:
             DataFrame loaded from JSON
         """
         # Map pandas-style parameters to Polars equivalents
-        polars_kwargs = {}
+        polars_kwargs: Dict[str, Any] = {}
+
+        # Handle dtype/schema parameters
+        dtype = kwargs.pop("dtype", None)
+        schema = kwargs.pop("schema", None)
+
+        # If both are provided, schema takes precedence
+        schema_to_use = schema if schema is not None else dtype
+
+        if schema_to_use is not None:
+            polars_schema = convert_schema_to_polars(schema_to_use)
+            if polars_schema is not None:
+                polars_kwargs["schema"] = polars_schema
 
         # Use Polars JSON read - orient parameter support is limited
         # Remove pandas-specific parameters that Polars doesn't support
-        polars_kwargs = {
-            k: v for k, v in kwargs.items() if k not in ["orient", "lines"]
-        }
+        polars_kwargs.update(
+            {k: v for k, v in kwargs.items() if k not in ["orient", "lines"]}
+        )
 
         try:
             df = pl.read_json(path, **polars_kwargs)
@@ -437,6 +523,11 @@ class DataFrame:
             SQL query string
         con : connection object
             Database connection
+        dtype : dict, pl.Schema, or None, optional
+            Schema specification for columns. Can be pandas-style dict or Polars schema.
+            See DataFrame constructor for details.
+        schema : dict, pl.Schema, or None, optional
+            Direct Polars schema specification (alternative to dtype).
         **kwargs
             Additional arguments passed to Polars read_database()
 
@@ -445,6 +536,18 @@ class DataFrame:
         DataFrame
             DataFrame loaded from SQL query
         """
+        # Handle dtype/schema parameters
+        dtype = kwargs.pop("dtype", None)
+        schema = kwargs.pop("schema", None)
+
+        # If both are provided, schema takes precedence
+        schema_to_use = schema if schema is not None else dtype
+
+        if schema_to_use is not None:
+            polars_schema = convert_schema_to_polars(schema_to_use)
+            if polars_schema is not None:
+                kwargs["schema"] = polars_schema
+
         return cls(pl.read_database(sql, con, **kwargs))
 
     @classmethod
@@ -456,6 +559,11 @@ class DataFrame:
         ----------
         path : str
             Path to Feather file
+        dtype : dict, pl.Schema, or None, optional
+            Schema specification for columns. Can be pandas-style dict or Polars schema.
+            See DataFrame constructor for details.
+        schema : dict, pl.Schema, or None, optional
+            Direct Polars schema specification (alternative to dtype).
         **kwargs
             Additional arguments passed to Polars read_ipc()
 
@@ -464,7 +572,30 @@ class DataFrame:
         DataFrame
             DataFrame loaded from Feather file
         """
-        return cls(pl.read_ipc(path, **kwargs))
+        # Handle dtype/schema parameters
+        dtype = kwargs.pop("dtype", None)
+        schema = kwargs.pop("schema", None)
+
+        # If both are provided, schema takes precedence
+        schema_to_use = schema if schema is not None else dtype
+
+        # Note: Feather/IPC files don't support schema parameter, so we read first then cast
+        pl_df = pl.read_ipc(path, **kwargs)
+
+        # Apply schema conversion if provided (cast after reading)
+        if schema_to_use is not None:
+            polars_schema = convert_schema_to_polars(schema_to_use)
+            if polars_schema is not None:
+                # Cast columns to specified types
+                cast_expressions = [
+                    pl.col(col).cast(dtype_val)
+                    for col, dtype_val in polars_schema.items()
+                    if col in pl_df.columns
+                ]
+                if cast_expressions:
+                    pl_df = pl_df.with_columns(cast_expressions)
+
+        return cls(pl_df)
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -3182,9 +3313,7 @@ class _LocIndexer:
                     if isinstance(row_key, int) and not is_integer_index:
                         # Pandas creates a new row with this label when assigning
                         # Add the new label to the index and create a new row
-                        if self._df._index is None:
-                            self._df._index = []
-                        self._df._index.append(row_key)  # type: ignore[union-attr]
+                        self._df._index.append(row_key)
                         # For full row assignment (_set_rows), preserve dtypes - values will be assigned below
                         # No float casting needed since we're assigning actual values, not leaving NaN
                         new_row_data_no_cast: Dict[str, Any] = {}
@@ -3464,7 +3593,7 @@ class _LocIndexer:
                 col_names = [
                     polars_df.columns[c]
                     if isinstance(c, int) and 0 <= c < len(polars_df.columns)
-                    else c
+                    else str(c)
                     for c in col_keys
                 ]
             elif isinstance(col_key, list):
@@ -3485,7 +3614,7 @@ class _LocIndexer:
                             raise create_keyerror_with_suggestions(
                                 c, polars_df.columns, context="column"
                             )
-                        col_names.append(c)
+                        col_names.append(str(c))
             elif isinstance(col_key, int):
                 col_key_int = col_key
                 if col_key_int < 0:
@@ -3622,9 +3751,7 @@ class _LocIndexer:
                     if isinstance(row_key, int) and not is_integer_index:
                         # Pandas creates a new row with this label when assigning
                         # Add the new label to the index and create a new row
-                        if self._df._index is None:
-                            self._df._index = []
-                        self._df._index.append(row_key)  # type: ignore[misc]  # mypy doesn't understand this is reachable after None check
+                        self._df._index.append(row_key)
                         # Create a new row with NaN for all columns (pandas behavior)
                         # First, cast integer columns to float to allow NaN (matching pandas behavior)
                         cast_exprs = []
@@ -3727,7 +3854,7 @@ class _LocIndexer:
             col_names = [
                 polars_df.columns[c]
                 if isinstance(c, int) and 0 <= c < len(polars_df.columns)
-                else c
+                else str(c)
                 for c in col_keys
             ]
         elif isinstance(col_key, list):
@@ -3744,7 +3871,7 @@ class _LocIndexer:
                         raise create_keyerror_with_suggestions(
                             c, polars_df.columns, context="column"
                         )
-                    col_names.append(c)
+                    col_names.append(str(c))
         elif isinstance(col_key, int):
             # Handle negative column indices
             col_key_int = col_key
@@ -4201,7 +4328,7 @@ class _ILocIndexer:
             col_names = [
                 polars_df.columns[c]
                 if isinstance(c, int) and 0 <= c < len(polars_df.columns)
-                else c
+                else str(c)
                 for c in col_keys
             ]
         elif isinstance(col_key, list):
@@ -4214,7 +4341,7 @@ class _ILocIndexer:
                         raise IndexError(f"index {c} is out of bounds for axis 1")
                     col_names.append(polars_df.columns[c])
                 else:
-                    col_names.append(c)
+                    col_names.append(str(c))
         elif isinstance(col_key, int):
             # Handle negative column indices
             col_key_int = col_key

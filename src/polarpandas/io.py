@@ -35,6 +35,7 @@ from typing import Any
 
 from .frame import DataFrame
 from .lazyframe import LazyFrame
+from .utils import convert_schema_to_polars
 
 
 def read_csv(path: str, **kwargs: Any) -> DataFrame:
@@ -192,6 +193,11 @@ def scan_csv(path: str, **kwargs: Any) -> LazyFrame:
     ----------
     path : str
         Path to CSV file
+    dtype : dict, pl.Schema, or None, optional
+        Schema specification for columns. Can be pandas-style dict or Polars schema.
+        See DataFrame constructor for details.
+    schema : dict, pl.Schema, or None, optional
+        Direct Polars schema specification (alternative to dtype).
     **kwargs
         Additional arguments passed to Polars scan_csv()
 
@@ -208,6 +214,18 @@ def scan_csv(path: str, **kwargs: Any) -> LazyFrame:
     """
     import polars as pl
 
+    # Handle dtype/schema parameters
+    dtype = kwargs.pop("dtype", None)
+    schema = kwargs.pop("schema", None)
+
+    # If both are provided, schema takes precedence
+    schema_to_use = schema if schema is not None else dtype
+
+    if schema_to_use is not None:
+        polars_schema = convert_schema_to_polars(schema_to_use)
+        if polars_schema is not None:
+            kwargs["schema"] = polars_schema
+
     return LazyFrame(pl.scan_csv(path, **kwargs))
 
 
@@ -219,6 +237,11 @@ def scan_parquet(path: str, **kwargs: Any) -> LazyFrame:
     ----------
     path : str
         Path to Parquet file
+    dtype : dict, pl.Schema, or None, optional
+        Schema specification for columns. Can be pandas-style dict or Polars schema.
+        See DataFrame constructor for details.
+    schema : dict, pl.Schema, or None, optional
+        Direct Polars schema specification (alternative to dtype).
     **kwargs
         Additional arguments passed to Polars scan_parquet()
 
@@ -235,7 +258,31 @@ def scan_parquet(path: str, **kwargs: Any) -> LazyFrame:
     """
     import polars as pl
 
-    return LazyFrame(pl.scan_parquet(path, **kwargs))
+    # Handle dtype/schema parameters
+    dtype = kwargs.pop("dtype", None)
+    schema = kwargs.pop("schema", None)
+
+    # If both are provided, schema takes precedence
+    schema_to_use = schema if schema is not None else dtype
+
+    # Note: Parquet files don't support schema parameter in scan_parquet,
+    # so we need to cast after scanning using lazy expressions
+    lf = pl.scan_parquet(path, **kwargs)
+
+    # Apply schema conversion if provided (cast columns using lazy expressions)
+    if schema_to_use is not None:
+        polars_schema = convert_schema_to_polars(schema_to_use)
+        if polars_schema:
+            # Build with_columns expression for casting
+            cast_expressions = [
+                pl.col(col).cast(dtype_val) for col, dtype_val in polars_schema.items()
+            ]
+            if cast_expressions:
+                # Apply casts using lazy expressions
+                # This will be evaluated during collect
+                lf = lf.with_columns(cast_expressions)
+
+    return LazyFrame(lf)
 
 
 def scan_json(path: str, **kwargs: Any) -> LazyFrame:
@@ -246,6 +293,11 @@ def scan_json(path: str, **kwargs: Any) -> LazyFrame:
     ----------
     path : str
         Path to JSON file
+    dtype : dict, pl.Schema, or None, optional
+        Schema specification for columns. Can be pandas-style dict or Polars schema.
+        See DataFrame constructor for details.
+    schema : dict, pl.Schema, or None, optional
+        Direct Polars schema specification (alternative to dtype).
     **kwargs
         Additional arguments passed to Polars scan_ndjson()
 
@@ -261,5 +313,17 @@ def scan_json(path: str, **kwargs: Any) -> LazyFrame:
     >>> df = lf.collect()  # Materialize when ready
     """
     import polars as pl
+
+    # Handle dtype/schema parameters
+    dtype = kwargs.pop("dtype", None)
+    schema = kwargs.pop("schema", None)
+
+    # If both are provided, schema takes precedence
+    schema_to_use = schema if schema is not None else dtype
+
+    if schema_to_use is not None:
+        polars_schema = convert_schema_to_polars(schema_to_use)
+        if polars_schema is not None:
+            kwargs["schema"] = polars_schema
 
     return LazyFrame(pl.scan_ndjson(path, **kwargs))

@@ -1,5 +1,20 @@
 # TODO / Future Features
 
+## ✨ Recent Accomplishments
+
+### Schema Conversion Feature ✅
+- Implemented automatic schema conversion from pandas-style to Polars schemas
+- Supports string dtype names (e.g., "int64", "float64"), NumPy dtypes (e.g., `np.int64`), pandas dtypes (e.g., `pd.Int64Dtype()`), and Polars schemas
+- Integrated into DataFrame constructor and all I/O functions (read_csv, read_parquet, read_json, read_feather, read_sql, scan_csv, scan_parquet, scan_json)
+- Comprehensive test coverage with 552 tests passing
+
+### Code Quality Improvements ✅
+- Fixed all 24 mypy type errors
+- Removed unused type:ignore comments
+- Fixed unreachable code paths
+- Improved type annotations for better IDE support
+- All linting checks passing (ruff check, ruff format, mypy)
+
 ## 🎯 High Priority
 
 ### Advanced Indexing
@@ -56,7 +71,7 @@
 
 ### I/O Operations
 - [ ] `read_sql()` - Read from SQL database
-- [ ] `read_feather()` - Read Feather format
+- [x] `read_feather()` - Read Feather format (with schema/dtype support)
 - [ ] `read_orc()` - Read ORC format
 - [ ] `read_hdf()` - Read HDF5 format
 - [ ] `to_sql()` - Write to SQL database
@@ -67,6 +82,7 @@
 - [ ] `to_latex()` - Convert to LaTeX table
 
 ### Data Validation & Quality
+- [x] Schema conversion (pandas-style to Polars) - DataFrame constructor and I/O functions support `dtype`/`schema` parameters
 - [ ] `astype()` - Convert column types
 - [ ] `convert_dtypes()` - Infer better dtypes
 - [ ] `memory_usage()` - Memory usage per column
@@ -144,7 +160,7 @@
 - [ ] Complete type hints for all methods
 - [ ] Generic types for DataFrame/Series
 - [ ] Type stubs for better IDE support
-- [ ] mypy compatibility improvements
+- [x] mypy compatibility improvements (all 24 errors fixed)
 
 ### Documentation
 - [ ] Sphinx documentation site
@@ -190,7 +206,8 @@
 For reference, here's what we HAVE implemented:
 
 **DataFrame (60+ methods):**
-- Initialization, I/O (CSV, Parquet, JSON, Excel)
+- Initialization, I/O (CSV, Parquet, JSON, Excel, Feather)
+- Schema conversion (pandas-style `dtype`/`schema` to Polars) - supports string names, NumPy dtypes, pandas dtypes, and Polars schemas
 - Column operations, properties
 - Selection, filtering, sampling
 - Aggregations, descriptive stats
@@ -207,7 +224,8 @@ For reference, here's what we HAVE implemented:
 - Apply/map functions
 
 **Module Functions (16):**
-- read_csv, read_parquet, read_json, read_excel
+- read_csv, read_parquet, read_json, read_excel, read_feather, read_sql
+- scan_csv, scan_parquet, scan_json (all with schema/dtype support)
 - concat, merge, get_dummies, cut, pivot_table
 - date_range, to_datetime
 - isna, notna

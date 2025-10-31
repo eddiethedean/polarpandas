@@ -2,11 +2,11 @@
 
 > **The fastest pandas-compatible API you'll ever use**
 
-[![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
-[![Coverage](https://img.shields.io/badge/coverage-72%25-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
-[![Type Safety](https://img.shields.io/badge/type%20safety-100%25%20checked-brightgreen?style=for-the-badge)](https://github.com/eddiethedean/polarpandas)
-[![Python](https://img.shields.io/badge/python-3.8%2B-blue?style=for-the-badge)](https://python.org)
-[![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-498%20passing-brightgreen?style=flat)](https://github.com/eddiethedean/polarpandas)
+[![Coverage](https://img.shields.io/badge/coverage-72%25-brightgreen?style=flat)](https://github.com/eddiethedean/polarpandas)
+[![Type Safety](https://img.shields.io/badge/mypy-checked-brightgreen?style=flat)](https://mypy-lang.org/)
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue?style=flat)](https://python.org)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
 
 **PolarPandas** is a blazing-fast, pandas-compatible API built on top of Polars. Write pandas code, get Polars performance. It's that simple.
 
@@ -78,7 +78,7 @@ shape: (3, 6)
 - ✅ **Code Formatting** - Fully formatted with ruff formatter for consistency
 
 ### 🏆 **Production Ready**
-- ✅ **457 tests passing** (100% success rate)
+- ✅ **498 tests passing** (100% success rate)
 - ✅ **72% code coverage** with comprehensive test scenarios
 - ✅ **Zero linting errors** - clean, production-ready code
 - ✅ **Type checked** - mypy compliance for critical type safety
@@ -107,7 +107,9 @@ pip install -e .
 pip install polarpandas
 ```
 
-**Requirements:** Python 3.8+ and Polars (single dependency)
+**Requirements:** Python 3.8+ and Polars
+
+Optional: `numpy` (only if you want to pass NumPy dtype objects like `np.int64` in schemas)
 
 ## 🔥 Core Features
 
@@ -178,6 +180,53 @@ df.groupby("category").agg(pl.col("value").mean())  # Use Polars expressions
 df.pivot_table(values="sales", index="region", columns="month")
 df.rolling(window=3).mean()
 ```
+
+### 🧩 **Schema Conversion (pandas-style to Polars)**
+PolarPandas accepts schemas in multiple forms and converts them to Polars types automatically:
+
+- String dtype names: "int64", "float64", "object", "bool", "datetime", "category"
+- NumPy dtypes: `np.int64`, `np.float32`, `np.uint8`, ...
+- pandas dtypes: `pd.Int64Dtype()`, `pd.Float32Dtype()`, `pd.StringDtype()`, ...
+- Polars schema dict or `pl.Schema`
+
+Constructor usage:
+```python
+import numpy as np
+import polars as pl
+import polarpandas as ppd
+
+data = {"a": [1, 2, 3], "b": ["x", "y", "z"]}
+
+# Strings
+ df = ppd.DataFrame(data, dtype={"a": "int64", "b": "string"})
+
+# NumPy dtypes (requires optional numpy install)
+ df = ppd.DataFrame(data, dtype={"a": np.int64, "b": np.float64})
+
+# pandas dtypes
+# df = ppd.DataFrame(data, dtype={"a": pd.Int64Dtype(), "b": pd.StringDtype()})
+
+# Polars schema dict
+ df = ppd.DataFrame(data, dtype={"a": pl.Int64, "b": pl.Utf8})
+```
+
+I/O functions:
+```python
+# Eager
+ df = ppd.read_csv("data.csv", dtype={"id": "int64", "name": "string"})
+ df = ppd.read_json("data.json", schema={"value": "float64"})
+ df = ppd.read_parquet("data.parquet", dtype={"id": "uint32"})  # casts after read
+ df = ppd.read_feather("data.feather", schema={"flag": "bool"})  # casts after read
+
+# Lazy (scan)
+ lf = ppd.scan_csv("data.csv", schema={"id": "int64"})
+ lf = ppd.scan_parquet("data.parquet", dtype={"score": "float32"})  # lazy cast
+ lf = ppd.scan_json("data.json", dtype={"name": "string"})
+```
+
+Notes:
+- When both `dtype` and `schema` are provided, `schema` takes precedence.
+- Parquet/Feather do not accept a schema parameter at read time in Polars; types are cast after reading (or lazily for scans).
 
 ### 📈 **Series Operations**
 ```python
@@ -297,7 +346,7 @@ python benchmark_large.py
 ## 🧪 **Testing & Quality**
 
 ### ✅ **Comprehensive Testing**
-- **457 tests passing** (100% success rate)
+- **498 tests passing** (100% success rate)
 - **54 tests properly skipped** (documented limitations)
 - **72% code coverage** across all functionality
 - **Edge case handling** for empty DataFrames, null values, mixed types
@@ -348,7 +397,7 @@ mypy src/polarpandas/
 ```
 
 **Current Status:**
-- ✅ All tests passing (457 passed, 54 skipped)
+- ✅ All tests passing (498 passed, 54 skipped)
 - ✅ Zero linting errors (ruff check)
 - ✅ Code fully formatted (ruff format)
 - ✅ Type checked (mypy compliance)
@@ -436,7 +485,7 @@ pip install -e ".[dev,test]"
 - ✅ Optimized boolean mask assignment with Polars native operations
 - ✅ Better exception handling with helpful error messages
 - ✅ Code quality improvements with ruff formatting
-- ✅ 457 tests passing with parallel execution support
+- ✅ 498 tests passing with parallel execution support
 
 ### **v0.3.1**
 - ✅ Fixed GitHub Actions workflow dependencies (pytest, pandas, numpy, pyarrow)
