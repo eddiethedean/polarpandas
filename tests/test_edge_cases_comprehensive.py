@@ -190,7 +190,7 @@ class TestNullValues:
         )
 
     @pytest.mark.skip(
-        reason="Polars cannot handle datetime+NaN mixtures - permanent limitation"
+        reason="Polars cannot handle datetime+NaN mixtures. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_nan_values_with_different_dtypes(self):
         """Test NaN values with different data types."""
@@ -212,7 +212,7 @@ class TestNullValues:
         pd.testing.assert_frame_equal(ppd_df.to_pandas(), pd_df)
 
     @pytest.mark.skip(
-        reason="Polars cannot handle datetime+NaN mixtures - permanent limitation"
+        reason="Polars cannot handle datetime+NaN mixtures. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_nan_values_with_index(self):
         """Test NaN values with custom index."""
@@ -513,7 +513,7 @@ class TestErrorConditions:
             ppd_df.iloc[10, 0] = 100
 
     @pytest.mark.skip(
-        reason="Polars doesn't support dynamic DataFrame expansion - permanent limitation"
+        reason="Polars doesn't support dynamic DataFrame expansion. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_invalid_at_assignment(self):
         """Test behavior when assigning to out-of-bounds at."""

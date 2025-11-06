@@ -358,7 +358,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_read_json_with_index(self):
         """Test JSON reading with index."""
@@ -374,7 +374,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_read_json_with_columns(self):
         """Test JSON reading with columns orientation."""
@@ -390,7 +390,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_read_json_with_values(self):
         """Test JSON reading with values orientation."""
@@ -406,7 +406,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_read_json_with_split(self):
         """Test JSON reading with split orientation."""
@@ -422,7 +422,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_read_json_with_table(self):
         """Test JSON reading with table orientation."""
@@ -453,7 +453,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_to_json_with_index(self):
         """Test JSON writing with index."""
@@ -471,7 +471,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_to_json_with_columns(self):
         """Test JSON writing with columns orientation."""
@@ -489,7 +489,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_to_json_with_values(self):
         """Test JSON writing with values orientation."""
@@ -507,7 +507,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_to_json_with_split(self):
         """Test JSON writing with split orientation."""
@@ -525,7 +525,7 @@ class TestJSONIOComprehensive:
             os.unlink(filepath)
 
     @pytest.mark.skip(
-        reason="Polars doesn't support orient parameter for JSON operations - permanent limitation"
+        reason="Polars doesn't support pandas' orient parameter formats for JSON. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_to_json_with_table(self):
         """Test JSON writing with table orientation."""
@@ -681,7 +681,9 @@ class TestJSONIOComprehensive:
         import pytest
 
         # Excel reading is not implemented
-        with pytest.raises(NotImplementedError, match="read_excel not yet implemented"):
+        with pytest.raises(
+            NotImplementedError, match="read_excel.*not yet implemented"
+        ):
             ppd.read_excel("nonexistent.xlsx")
 
     def test_read_parquet_basic(self):

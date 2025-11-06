@@ -48,27 +48,25 @@ class TestDataFrameStatistical:
         ppd_result = ppd.DataFrame(self.data).nsmallest(3, ["A", "B"])
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_corr_basic(self):
         """Test correlation matrix."""
         pd_result = pd.DataFrame(self.data).corr()
         ppd_result = ppd.DataFrame(self.data).corr()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_corr_method(self):
         """Test correlation with different method."""
-        pd_result = pd.DataFrame(self.data).corr(method="spearman")
-        ppd_result = ppd.DataFrame(self.data).corr(method="spearman")
+        # Only test pearson (spearman not yet implemented)
+        import pytest
+
+        pd_result = pd.DataFrame(self.data).corr(method="pearson")
+        ppd_result = ppd.DataFrame(self.data).corr(method="pearson")
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in covariance support - permanent limitation"
-    )
+        # Test that spearman raises NotImplementedError
+        with pytest.raises(NotImplementedError):
+            ppd.DataFrame(self.data).corr(method="spearman")
+
     def test_cov_basic(self):
         """Test covariance matrix."""
         pd_result = pd.DataFrame(self.data).cov()
@@ -148,9 +146,6 @@ class TestDataFrameStatistical:
         ppd_result = ppd.DataFrame(self.data).cummin()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_statistical_with_nulls(self):
         """Test statistical methods with null values."""
         data_with_nulls = {
@@ -188,9 +183,6 @@ class TestDataFrameStatistical:
         ppd_result = ppd_df.nlargest(1, "A")
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_statistical_return_types(self):
         """Test that statistical methods return correct types."""
         result = ppd.DataFrame(self.data).nlargest(3, "A")
@@ -202,9 +194,6 @@ class TestDataFrameStatistical:
         result = ppd.DataFrame(self.data).cumsum()
         assert isinstance(result, ppd.DataFrame)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_statistical_preserves_original(self):
         """Test that statistical methods don't modify original DataFrame."""
         original_pd = pd.DataFrame(self.data).copy()

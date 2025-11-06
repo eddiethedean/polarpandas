@@ -25,7 +25,7 @@ class TestTranspose:
         # Each test method will create fresh DataFrames
 
     @pytest.mark.skip(
-        reason="Known limitation: Polars transpose converts mixed types to strings, pandas preserves as objects"
+        reason="Polars transpose converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_transpose_basic(self):
         """Test basic transpose functionality."""
@@ -34,7 +34,7 @@ class TestTranspose:
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
-        reason="Polars handles mixed types differently than pandas in transpose - permanent limitation"
+        reason="Polars transpose converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_T_property(self):
         """Test T property."""
@@ -43,7 +43,7 @@ class TestTranspose:
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
-        reason="Polars handles mixed types differently than pandas in transpose - permanent limitation"
+        reason="Polars transpose converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_transpose_with_index(self):
         """Test transpose with custom index."""
@@ -95,7 +95,7 @@ class TestTranspose:
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
-        reason="Polars handles mixed types differently than pandas in transpose - permanent limitation"
+        reason="Polars transpose converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_transpose_with_nulls(self):
         """Test transpose with null values."""
@@ -108,7 +108,7 @@ class TestTranspose:
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
-        reason="Polars handles mixed types differently than pandas in transpose - permanent limitation"
+        reason="Polars transpose converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_transpose_mixed_dtypes(self):
         """Test transpose with mixed data types."""
@@ -173,7 +173,7 @@ class TestTranspose:
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
-        reason="Polars handles mixed types differently than pandas in transpose - permanent limitation"
+        reason="Polars transpose converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_transpose_with_string_index(self):
         """Test transpose with string index."""

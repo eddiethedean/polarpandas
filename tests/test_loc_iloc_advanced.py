@@ -45,7 +45,7 @@ class TestLocAdvanced:
         assert pd_result == ppd_result
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_loc_single_row_access(self):
         """Test single row access with loc."""
@@ -80,7 +80,7 @@ class TestLocAdvanced:
         )
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_loc_single_column_access(self):
         """Test single column access with loc."""
@@ -115,7 +115,7 @@ class TestLocAdvanced:
         )
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_loc_slice_access(self):
         """Test slice access with loc."""
@@ -135,7 +135,7 @@ class TestLocAdvanced:
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_loc_boolean_indexing(self):
         """Test boolean indexing with loc."""
@@ -152,7 +152,7 @@ class TestLocAdvanced:
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_loc_list_indexing(self):
         """Test list indexing with loc."""
@@ -235,7 +235,7 @@ class TestLocAdvanced:
         pd.testing.assert_frame_equal(ppd_df_copy.to_pandas(), pd_df_copy)
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_loc_error_handling(self):
         """Test that loc raises same errors as pandas."""
@@ -276,7 +276,7 @@ class TestILocAdvanced:
         assert pd_result == ppd_result
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_iloc_single_row_access(self):
         """Test single row access with iloc."""
@@ -295,7 +295,7 @@ class TestILocAdvanced:
         )
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_iloc_single_column_access(self):
         """Test single column access with iloc."""
@@ -314,7 +314,7 @@ class TestILocAdvanced:
         )
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_iloc_slice_access(self):
         """Test slice access with iloc."""
@@ -334,7 +334,7 @@ class TestILocAdvanced:
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_iloc_list_indexing(self):
         """Test list indexing with iloc."""
@@ -395,7 +395,7 @@ class TestILocAdvanced:
         pd.testing.assert_frame_equal(ppd_df_copy.to_pandas(), pd_df_copy)
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_iloc_error_handling(self):
         """Test that iloc raises same errors as pandas."""
@@ -630,7 +630,7 @@ class TestEdgeCases:
             pass
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_single_column_dataframe(self):
         """Test loc/iloc with single column DataFrame."""
@@ -663,7 +663,7 @@ class TestEdgeCases:
         pd.testing.assert_frame_equal(ppd_df_copy.to_pandas(), pd_df_copy)
 
     @pytest.mark.skip(
-        reason="Polars mixed type handling differs from pandas - permanent limitation"
+        reason="Polars converts mixed types to strings; pandas preserves as objects. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_mixed_dtypes(self):
         """Test loc/iloc with mixed data types."""
@@ -677,7 +677,7 @@ class TestEdgeCases:
         ppd_df = ppd.DataFrame(data)
 
         # Test access with different dtypes
-        for col in data.keys():
+        for col in data:
             pd_result = pd_df.loc[:, col]
             ppd_result = ppd_df.loc[:, col]
             # Convert both to string for comparison due to Polars mixed type limitation

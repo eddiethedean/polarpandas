@@ -126,7 +126,7 @@ class TestDatetimeAccessorEnhanced:
         # Each test method will create fresh Series
 
     @pytest.mark.skip(
-        reason="Known limitation: Polars doesn't have direct equivalent to pandas date property that returns date objects"
+        reason="Polars returns datetime64[ms] with time 00:00:00 instead of date objects - fundamental limitation"
     )
     def test_date_property(self):
         """Test date property."""
@@ -234,8 +234,8 @@ class TestDatetimeAccessorEnhanced:
 
     def test_round_method(self):
         """Test round method."""
-        pd_result = pd.Series(self.data).dt.round("H")
-        ppd_result = ppd.Series(self.data).dt.round("H")
+        pd_result = pd.Series(self.data).dt.round("h")
+        ppd_result = ppd.Series(self.data).dt.round("h")
         pd.testing.assert_series_equal(
             ppd_result.to_pandas(), pd_result, check_dtype=False, check_names=False
         )
@@ -250,7 +250,7 @@ class TestDatetimeAccessorEnhanced:
         )
 
     @pytest.mark.skip(
-        reason="Polars datetime accessor with empty series differs from pandas - permanent limitation"
+        reason="Polars datetime accessor with empty series differs from pandas. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_datetime_methods_empty_series(self):
         """Test datetime methods with empty Series."""

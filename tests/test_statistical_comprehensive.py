@@ -25,9 +25,6 @@ class TestStatisticalMethodsComprehensive:
         # Don't create DataFrames here to avoid state pollution
         # Each test method will create fresh DataFrames
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_corr_with_nulls(self):
         """Test correlation with null values."""
         data_with_nulls = {
@@ -42,9 +39,6 @@ class TestStatisticalMethodsComprehensive:
         ppd_result = ppd_df.corr()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_corr_single_column(self):
         """Test correlation with single column."""
         single_col_data = {"A": [1, 2, 3, 4, 5]}
@@ -55,9 +49,6 @@ class TestStatisticalMethodsComprehensive:
         ppd_result = ppd_df.corr()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_corr_empty_dataframe(self):
         """Test correlation with empty DataFrame."""
         pd_empty = pd.DataFrame()
@@ -73,9 +64,6 @@ class TestStatisticalMethodsComprehensive:
         assert len(pd_result.columns) == 0
         assert len(ppd_result.columns) == 0
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_corr_single_row(self):
         """Test correlation with single row."""
         single_row_data = {"A": [1], "B": [10], "C": [1.1]}
@@ -86,19 +74,20 @@ class TestStatisticalMethodsComprehensive:
         ppd_result = ppd_df.corr()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_corr_methods(self):
         """Test correlation with different methods."""
-        for method in ["pearson", "kendall", "spearman"]:
-            pd_result = pd.DataFrame(self.data).corr(method=method)
-            ppd_result = ppd.DataFrame(self.data).corr(method=method)
-            pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        # Only test pearson (other methods not yet implemented)
+        method = "pearson"
+        pd_result = pd.DataFrame(self.data).corr(method=method)
+        ppd_result = ppd.DataFrame(self.data).corr(method=method)
+        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in covariance support - permanent limitation"
-    )
+        # Test that other methods raise NotImplementedError
+        with pytest.raises(NotImplementedError):
+            ppd.DataFrame(self.data).corr(method="kendall")
+        with pytest.raises(NotImplementedError):
+            ppd.DataFrame(self.data).corr(method="spearman")
+
     def test_cov_with_nulls(self):
         """Test covariance with null values."""
         data_with_nulls = {
@@ -193,9 +182,6 @@ class TestStatisticalMethodsComprehensive:
         ppd_result = ppd_df.cummin()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_statistical_methods_empty_dataframe(self):
         """Test statistical methods with empty DataFrame."""
         pd_empty = pd.DataFrame()
@@ -222,9 +208,6 @@ class TestStatisticalMethodsComprehensive:
         ppd_result = ppd_df.cumsum()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_statistical_methods_large_dataset(self):
         """Test statistical methods with large dataset."""
         # Create larger dataset
@@ -257,9 +240,6 @@ class TestStatisticalMethodsComprehensive:
         ppd_result = ppd_df.cumsum()
         pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_statistical_methods_return_types(self):
         """Test that statistical methods return correct types."""
         # Test correlation
@@ -298,9 +278,6 @@ class TestStatisticalMethodsComprehensive:
         result = ppd.DataFrame(self.data).cummin()
         assert isinstance(result, ppd.DataFrame)
 
-    @pytest.mark.skip(
-        reason="Polars doesn't have built-in correlation support - permanent limitation"
-    )
     def test_statistical_methods_preserve_original(self):
         """Test that statistical methods don't modify original DataFrame."""
         original_pd = pd.DataFrame(self.data).copy()

@@ -354,7 +354,7 @@ class LazyFrame:
         how_literal: Literal[
             "inner", "left", "right", "full", "semi", "anti", "cross", "outer"
         ] = cast(
-            Literal["inner", "left", "right", "full", "semi", "anti", "cross", "outer"],
+            "Literal['inner', 'left', 'right', 'full', 'semi', 'anti', 'cross', 'outer']",
             how,
         )
         result_lazy = self._df.join(other_df_lazy, on=on, how=how_literal, **kwargs)

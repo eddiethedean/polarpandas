@@ -160,7 +160,7 @@ class TestSetIndex:
         )
 
     @pytest.mark.skip(
-        reason="Polars has limited support for null values in index - permanent limitation"
+        reason="Polars has limited support for null values in index. See KNOWN_LIMITATIONS.md - permanent limitation"
     )
     def test_set_index_with_nulls(self):
         """Test set_index with null values."""
@@ -211,7 +211,7 @@ class TestSetIndex:
         ppd_df = ppd.DataFrame(data_mixed)
 
         # Test each column type
-        for col in data_mixed.keys():
+        for col in data_mixed:
             pd_result = pd_df.set_index(col)
             ppd_result = ppd_df.set_index(col)
             pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)

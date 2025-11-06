@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polarpandas"
-version = "0.5.0"
+version = "0.6.0"
 description = "A pandas-compatible API layer built on top of Polars for high-performance data manipulation"
 readme = "README.md"
 license = {text = "MIT"}
@@ -39,7 +39,7 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
-    "mypy>=1.0.0",
+    "ty>=0.0.1",
     "ruff>=0.1.0",
     "black>=22.0.0",
 ]
@@ -56,9 +56,51 @@ pandas = [
 numpy = [
     "numpy>=1.20.0",  # Optional: Required for using numpy dtype objects in schema conversion (e.g., np.int64, np.float64)
 ]
+excel = [
+    "openpyxl>=3.0.0",  # For Excel file I/O (read_excel, to_excel)
+    "xlsxwriter>=3.0.0",  # For Excel file writing (to_excel)
+]
+hdf5 = [
+    "h5py>=3.0.0",  # For HDF5 file I/O (read_hdf, to_hdf)
+    "tables>=3.8.0",  # Alternative HDF5 backend (pytables)
+]
+html = [
+    "lxml>=4.0.0",  # For HTML/XML parsing (read_html, read_xml, to_xml)
+    "html5lib>=1.1",  # Alternative HTML parser (read_html)
+]
+spss = [
+    "pyreadstat>=1.0.0",  # For SPSS/Stata file I/O (read_spss, to_stata)
+]
+sas = [
+    "sas7bdat>=2.0.0",  # For SAS file I/O (read_sas)
+]
+xarray = [
+    "xarray>=2022.0.0",  # For xarray conversion (to_xarray)
+]
+clipboard = [
+    "pyperclip>=1.8.0",  # For clipboard operations (read_clipboard, to_clipboard)
+]
+formatting = [
+    "tabulate>=0.9.0",  # For table formatting (to_latex, to_markdown, to_html)
+]
 docs = [
     "sphinx>=5.0.0",
     "sphinx-rtd-theme>=1.0.0",
+]
+all = [
+    "pandas>=1.5.0",
+    "numpy>=1.20.0",
+    "openpyxl>=3.0.0",
+    "xlsxwriter>=3.0.0",
+    "h5py>=3.0.0",
+    "tables>=3.8.0",
+    "lxml>=4.0.0",
+    "html5lib>=1.1",
+    "pyreadstat>=1.0.0",
+    "sas7bdat>=2.0.0",
+    "xarray>=2022.0.0",
+    "pyperclip>=1.8.0",
+    "tabulate>=0.9.0",
 ]
 
 [project.urls]
@@ -155,6 +197,7 @@ select = [
     "C4", # flake8-comprehensions
     "UP", # pyupgrade
 ]
+extend-select = ["C4", "SIM", "TCH", "UP"]
 ignore = [
     "E501",  # line too long, handled by black
     "B008",  # do not perform function calls in argument defaults
@@ -184,3 +227,6 @@ extend-exclude = '''
   | dist
 )/
 '''
+
+[tool.ty.rules]
+unresolved-import = "ignore"

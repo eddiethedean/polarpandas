@@ -112,12 +112,11 @@ class TestDataFrameErrorHandling:
         df2 = ppd.DataFrame({"b": [3, 4]})
 
         # Very large axis value - may not raise, just test it doesn't crash
-        try:
+        import contextlib
+
+        with contextlib.suppress(ValueError, IndexError, TypeError, Exception):
             _ = ops.concat([df1, df2], axis=999)
             # If it doesn't raise, that's acceptable behavior
-        except (ValueError, IndexError, TypeError, Exception):
-            # Expected to raise some error
-            pass
 
     def test_invalid_groupby_column(self):
         """Test error for invalid groupby column."""

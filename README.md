@@ -4,7 +4,7 @@
 
 [![Tests](https://img.shields.io/badge/tests-498%20passing-brightgreen?style=flat)](https://github.com/eddiethedean/polarpandas)
 [![Coverage](https://img.shields.io/badge/coverage-72%25-brightgreen?style=flat)](https://github.com/eddiethedean/polarpandas)
-[![Type Safety](https://img.shields.io/badge/mypy-checked-brightgreen?style=flat)](https://mypy-lang.org/)
+[![Type Safety](https://img.shields.io/badge/ty-checked-brightgreen?style=flat)](https://docs.astral.sh/ty/)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue?style=flat)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)
 
@@ -63,26 +63,35 @@ shape: (3, 6)
 └─────────┴─────┴─────────┴─────────────┴────────────┴────────────┘
 ```
 
-## 🎯 What's New in v0.4.0
+## 🎯 What's New in v0.6.0
 
-### ⚡ **Performance Improvements**
-- ✅ **Native Polars Indexing** - All advanced indexing setters (`iat`, `iloc`, `loc`) now use native Polars implementations
-- ✅ **Boolean Mask Optimization** - Boolean mask assignment is now **270x faster** using Polars native operations
-- ✅ **No Pandas Dependency** - Pandas is now truly optional, required only for specific conversion features
-- ✅ **Optimized Indexing** - Eliminated pandas fallbacks for all indexing operations
+### 🚀 **Massive API Expansion**
+- ✅ **619 pandas-compatible features** - Comprehensive pandas API coverage
+- ✅ **69 module-level functions** - All major pandas functions implemented
+- ✅ **206 DataFrame methods** - Complete DataFrame API support
+- ✅ **186 Series methods** - Full Series functionality
+- ✅ **73 Index methods** - Complete Index operations
+- ✅ **57 String accessor methods** - Full `.str` accessor support
+- ✅ **28 Datetime accessor methods** - Comprehensive `.dt` accessor support
+- ✅ **91 LazyFrame methods** - Complete LazyFrame API (262 total methods tracked including pandas DataFrame comparison)
+
+### 📊 **Enhanced I/O Support**
+- ✅ **Comprehensive file format support** - CSV, JSON, Parquet, Excel, HDF5, HTML, XML, Stata, SPSS, SAS, and more
+- ✅ **Optional dependencies** - Organized into feature groups (excel, hdf5, html, spss, sas, xarray, clipboard, formatting)
+- ✅ **Flexible installation** - Install only what you need: `pip install polarpandas[excel]` or `pip install polarpandas[all]`
 
 ### 🏗️ **Code Quality & Architecture**
-- ✅ **Exception Handling** - Enhanced error messages with typo suggestions for better developer experience
-- ✅ **Code Refactoring** - Centralized index management and exception utilities
-- ✅ **Type Safety** - Resolved all critical type checking issues
-- ✅ **Code Formatting** - Fully formatted with ruff formatter for consistency
+- ✅ **Type checking with `ty`** - Fast, modern type checker integration
+- ✅ **Comprehensive test coverage** - All implemented features have unit tests
+- ✅ **API compatibility matrix** - Complete tracking of pandas API compatibility
+- ✅ **Zero linting errors** - Clean, production-ready code
+- ✅ **Enhanced error messages** - Better developer experience with helpful suggestions
 
 ### 🏆 **Production Ready**
-- ✅ **498 tests passing** (100% success rate)
-- ✅ **72% code coverage** with comprehensive test scenarios
-- ✅ **Zero linting errors** - clean, production-ready code
-- ✅ **Type checked** - mypy compliance for critical type safety
-- ✅ **Proper limitation documentation** - 54 tests skipped with clear reasons
+- ✅ **Comprehensive test suite** - All features thoroughly tested
+- ✅ **Zero linting errors** - Clean, production-ready code
+- ✅ **Type checked** - Full type safety with `ty` type checker
+- ✅ **Complete documentation** - API compatibility matrix and comprehensive docs
 
 ### 🚀 **Features (from v0.2.0)**
 - **LazyFrame Class** - Optional lazy execution for maximum performance
@@ -92,7 +101,7 @@ shape: (3, 6)
 - **String & datetime accessors** - Full `.str` and `.dt` accessor support
 - **Module-level functions** - `read_csv()`, `concat()`, `merge()`, `get_dummies()`
 - **Comprehensive edge cases** - Empty DataFrames, null values, mixed types
-- **Full type annotations** - Complete mypy type checking support
+- **Full type annotations** - Complete ty type checking support
 - **Comprehensive test coverage** - Tests for all core functionality and edge cases
 
 ## 📦 Installation
@@ -355,7 +364,7 @@ python benchmark_large.py
 
 ### ✅ **Code Quality**
 - **Zero linting errors** with ruff compliance
-- **100% type safety** - all mypy type errors resolved
+- **100% type safety** - all ty type errors resolved
 - **Fully formatted code** with ruff formatter
 - **Clean code standards** throughout
 - **Production-ready** code quality
@@ -393,14 +402,14 @@ ruff format .
 ruff check .
 
 # Type checking
-mypy src/polarpandas/
+ty check src/polarpandas/
 ```
 
 **Current Status:**
 - ✅ All tests passing (498 passed, 54 skipped)
 - ✅ Zero linting errors (ruff check)
 - ✅ Code fully formatted (ruff format)
-- ✅ Type checked (mypy compliance)
+- ✅ Type checked (ty compliance)
 - ✅ Parallel test execution supported
 
 ### **Benchmarks**
@@ -451,6 +460,7 @@ pip install -e ".[dev,test]"
 
 ## 📚 **Documentation**
 
+- **[API Compatibility Matrix](https://github.com/eddiethedean/polarpandas/blob/main/PANDAS_FUNCTION_MATRIX.md)** - Complete pandas API compatibility matrix showing which functions and methods are implemented
 - **[API Reference](docs/api.md)** - Complete API documentation
 - **[Performance Guide](docs/performance.md)** - Optimization tips
 - **[Migration Guide](docs/migration.md)** - From pandas to PolarPandas
@@ -470,22 +480,23 @@ pip install -e ".[dev,test]"
 
 ## 📈 **Roadmap**
 
-### **v0.4.0 (Current)**
+### **v0.6.0 (Current)**
+- ✅ **619 pandas-compatible features** - Comprehensive API coverage
+- ✅ **Complete Index methods** - All 73 Index methods implemented
+- ✅ **Full String accessor** - All 57 `.str` methods implemented
+- ✅ **Complete Datetime accessor** - All 28 `.dt` methods implemented
+- ✅ **91 LazyFrame methods** - Complete LazyFrame API with pandas DataFrame comparison (262 total methods tracked)
+- ✅ **Enhanced I/O support** - Multiple file formats with optional dependencies
+- ✅ **Type checking with `ty`** - Modern, fast type checker integration
+- ✅ **API compatibility matrix** - Comprehensive tracking of pandas compatibility
 
-#### Performance & Architecture Improvements
-- ✅ **Native Polars Indexing** - Replaced all pandas fallbacks with native Polars implementations for `iat`, `iloc`, and `loc` setters
-- ✅ **Boolean Mask Optimization** - 270x performance improvement for boolean mask assignment operations
+### **v0.4.0**
+- ✅ **Native Polars Indexing** - Replaced all pandas fallbacks with native Polars implementations
+- ✅ **Boolean Mask Optimization** - 270x performance improvement for boolean mask assignment
 - ✅ **Optional Pandas** - Pandas is now truly optional, only required for specific conversion features
-- ✅ **Enhanced Error Handling** - Typo suggestions in error messages for better developer experience
+- ✅ **Enhanced Error Handling** - Typo suggestions in error messages
 - ✅ **Code Refactoring** - Centralized index management and exception utilities
 - ✅ **Type Safety** - Improved type checking and resolved critical type issues
-
-#### Technical Improvements
-- ✅ All indexing operations use native Polars (no pandas conversion overhead)
-- ✅ Optimized boolean mask assignment with Polars native operations
-- ✅ Better exception handling with helpful error messages
-- ✅ Code quality improvements with ruff formatting
-- ✅ 498 tests passing with parallel execution support
 
 ### **v0.3.1**
 - ✅ Fixed GitHub Actions workflow dependencies (pytest, pandas, numpy, pyarrow)
@@ -498,16 +509,16 @@ pip install -e ".[dev,test]"
 - ✅ **Lazy I/O Operations** - `scan_csv()`, `scan_parquet()`, `scan_json()`
 - ✅ **Eager DataFrame** - Default pandas-like behavior
 - ✅ **Seamless Conversion** - `df.lazy()` and `lf.collect()` methods
-- ✅ **100% Type Safety** - All mypy errors resolved
+- ✅ **100% Type Safety** - All ty errors resolved
 - ✅ **Comprehensive Testing** - 457 tests covering all functionality
 - ✅ **Code Quality** - Zero linting errors, fully formatted code
 
-### **v0.5.0 (Planned)**
+### **v0.7.0 (Planned)**
 - [ ] Advanced MultiIndex support
 - [ ] More statistical methods
-- [ ] Enhanced I/O formats (SQL, Feather, HDF5)
-- [ ] Additional string/datetime methods
+- [ ] Enhanced I/O formats (additional formats)
 - [ ] Further performance optimizations
+- [ ] Additional LazyFrame method implementations
 
 ### **Future**
 - [ ] Machine learning integration

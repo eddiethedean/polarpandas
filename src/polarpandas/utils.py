@@ -21,12 +21,9 @@ Examples
 >>> bins = ppd.cut([1, 2, 3, 4, 5], bins=3)
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import polars as pl
-
-if TYPE_CHECKING:
-    pass
 
 
 def isna(obj: Any) -> Any:
@@ -53,9 +50,7 @@ def isna(obj: Any) -> Any:
     from .frame import DataFrame
     from .series import Series
 
-    if isinstance(obj, DataFrame):
-        return obj.isna()
-    elif isinstance(obj, Series):
+    if isinstance(obj, (DataFrame, Series)):
         return obj.isna()
     else:
         # For scalar values, return boolean
@@ -86,13 +81,57 @@ def notna(obj: Any) -> Any:
     from .frame import DataFrame
     from .series import Series
 
-    if isinstance(obj, DataFrame):
-        return obj.notna()
-    elif isinstance(obj, Series):
+    if isinstance(obj, (DataFrame, Series)):
         return obj.notna()
     else:
         # For scalar values, return boolean
         return obj is not None
+
+
+def isnull(obj: Any) -> Any:
+    """
+    Detect missing values (alias for isna()).
+
+    Parameters
+    ----------
+    obj : Any
+        Object to check for missing values
+
+    Returns
+    -------
+    DataFrame or bool
+        Boolean DataFrame indicating missing values, or bool for scalars
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> df = ppd.DataFrame({"A": [1, None, 3]})
+    >>> result = ppd.isnull(df)
+    """
+    return isna(obj)
+
+
+def notnull(obj: Any) -> Any:
+    """
+    Detect non-missing values (alias for notna()).
+
+    Parameters
+    ----------
+    obj : Any
+        Object to check for non-missing values
+
+    Returns
+    -------
+    DataFrame or bool
+        Boolean DataFrame indicating non-missing values, or bool for scalars
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> df = ppd.DataFrame({"A": [1, None, 3]})
+    >>> result = ppd.notnull(df)
+    """
+    return notna(obj)
 
 
 def cut(
@@ -385,3 +424,114 @@ def _convert_dtype_string(dtype_str: str) -> Any:
 
     else:
         raise ValueError(f"Unsupported dtype string: {dtype_str}")
+
+
+def to_numeric(arg: Any, errors: str = "raise", downcast: Optional[str] = None) -> Any:
+    """
+    Convert argument to a numeric type.
+
+    Parameters
+    ----------
+    arg : scalar, list, array-like, or Series
+        The argument to be converted to a numeric type.
+    errors : {'ignore', 'raise', 'coerce'}, default 'raise'
+        If 'raise', then invalid parsing will raise an exception.
+        If 'coerce', then invalid parsing will be set as NaN.
+        If 'ignore', then invalid parsing will return the input.
+    downcast : str, optional
+        If 'integer' or 'signed', downcast to the smallest integer type.
+        If 'float', downcast to the smallest float type.
+        If 'unsigned', downcast to the smallest unsigned integer type.
+
+    Returns
+    -------
+    Series or scalar
+        Numeric data. If input is Series, returns Series. Otherwise returns scalar or array.
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> ppd.to_numeric(['1.0', '2', '-3', '4.5'])
+    >>> ppd.to_numeric(['1.0', '2', 'invalid'], errors='coerce')
+    """
+    from .series import Series
+
+    if errors not in ("raise", "coerce", "ignore"):
+        raise ValueError(
+            f"errors must be 'raise', 'coerce', or 'ignore', got '{errors}'"
+        )
+
+    # Handle Series input
+    if isinstance(arg, Series):
+        import polars as pl
+
+        try:
+            # Try to convert to numeric
+            result_series = arg._series.cast(pl.Float64, strict=True)
+            return Series(result_series)
+        except Exception as e:
+            if errors == "raise":
+                raise ValueError(f"Could not convert to numeric: {e}") from e
+            elif errors == "coerce":
+                # Return Series with NaN for invalid values
+                # Polars will handle this automatically
+                try:
+                    result_series = arg._series.cast(pl.Float64, strict=False)
+                    return Series(result_series)
+                except Exception:
+                    # If still fails, return original
+                    return arg
+            else:  # ignore
+                return arg
+
+    # Handle list/array-like input
+    try:
+        import polars as pl
+
+        # Convert to Polars Series and cast to numeric
+        pl_series = pl.Series(arg)
+        if errors == "coerce":
+            result_series = pl_series.cast(pl.Float64, strict=False)
+        else:
+            result_series = pl_series.cast(pl.Float64, strict=True)
+        return Series(result_series)
+    except Exception as e:
+        if errors == "raise":
+            raise ValueError(f"Could not convert to numeric: {e}") from e
+        elif errors == "coerce":
+            # Try with strict=False to coerce invalid values to NaN
+            try:
+                import polars as pl
+
+                pl_series = pl.Series(arg)
+                result_series = pl_series.cast(pl.Float64, strict=False)
+                return Series(result_series)
+            except Exception:
+                # If still fails, return original
+                return arg
+        else:  # ignore
+            return arg
+
+
+def unique(values: Any) -> Any:
+    """
+    Return unique values in the order of appearance.
+
+    Parameters
+    ----------
+    values : array-like, Series, or list
+        Input values.
+
+    Returns
+    -------
+    array-like
+        Unique values in the order of appearance.
+    """
+    from .series import Series
+
+    if isinstance(values, Series):
+        return Series(values._series.unique())
+    else:
+        # Convert to Polars Series and get unique values
+        pl_series = pl.Series(values)
+        return pl_series.unique().to_list()

@@ -177,6 +177,7 @@ coverage.xml
 # Benchmark results
 benchmark_results/
 *.benchmark
+.benchmarks/
 
 # Documentation builds
 docs/_build/
