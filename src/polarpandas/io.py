@@ -622,7 +622,7 @@ def read_orc(path: str, **kwargs: Any) -> DataFrame:
     """
     import polars as pl
 
-    return DataFrame(pl.read_orc(path, **kwargs))
+    return DataFrame(pl.read_orc(path, **kwargs))  # type: ignore[attr-defined]
 
 
 def read_pickle(

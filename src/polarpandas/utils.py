@@ -21,7 +21,10 @@ Examples
 >>> bins = ppd.cut([1, 2, 3, 4, 5], bins=3)
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+
+if TYPE_CHECKING:
+    from .series import Series
 
 import polars as pl
 
@@ -135,16 +138,19 @@ def notnull(obj: Any) -> Any:
 
 
 def cut(
-    x: List[Any], bins: Any, labels: Optional[List[str]] = None, **kwargs: Any
-) -> Any:
+    x: Union[List[Any], "Series"],
+    bins: Union[int, List[float]],
+    labels: Optional[List[str]] = None,
+    **kwargs: Any,
+) -> Union[List[Any], "Series"]:
     """
     Bin values into discrete intervals.
 
     Parameters
     ----------
-    x : List[Any]
+    x : List[Any] or Series
         Input array to be binned
-    bins : Any
+    bins : int or List[float]
         Number of bins (int) or explicit bin edges (list)
     labels : List[str], optional
         Labels for the resulting bins. Should be of length bins (for int bins)
@@ -162,15 +168,21 @@ def cut(
     >>> import polarpandas as ppd
     >>> result = ppd.cut([1, 2, 3, 4, 5], bins=3)
     """
+    import polars as pl
+
     from .series import Series
 
     # Handle empty list - return empty list for backward compatibility
-    if len(x) == 0:
+    if isinstance(x, list) and len(x) == 0:
         return []
 
-    # Convert input to Polars Series
-    # Handle polarpandas Series
-    pl_series = x._series if isinstance(x, Series) else pl.Series(x)
+    # Convert input to Polars Series with type narrowing
+    if hasattr(x, "_series"):
+        # It's a Series object
+        pl_series: pl.Series = x._series
+    else:
+        # It's a list or other iterable
+        pl_series = pl.Series(x)
 
     # Handle explicit bin edges
     if isinstance(bins, list):
@@ -184,7 +196,9 @@ def cut(
 
         if labels is not None:
             if len(labels) != num_intervals:
-                raise ValueError(f"labels must be of length {num_intervals} for {len(bins)} bin edges")
+                raise ValueError(
+                    f"labels must be of length {num_intervals} for {len(bins)} bin edges"
+                )
             # Polars cut needs len(bins) + 1 labels, so we pad
             labels + [labels[-1]]
         else:
@@ -193,8 +207,9 @@ def cut(
         try:
             # Use Polars cut - it expects quantiles, not bin edges
             # So we need to manually bin the data
-            result_categories = []
-            for val in x:
+            result_categories: List[Optional[str]] = []
+            pl_list = pl_series.to_list()
+            for val in pl_list:
                 if val is None:
                     result_categories.append(None)
                 else:
@@ -209,7 +224,9 @@ def cut(
                         if labels:
                             result_categories.append(labels[bin_idx])
                         else:
-                            result_categories.append(f"({bins[bin_idx]}, {bins[bin_idx + 1]}]")
+                            result_categories.append(
+                                f"({bins[bin_idx]}, {bins[bin_idx + 1]}]"
+                            )
                     else:
                         result_categories.append(None)
 
@@ -222,16 +239,21 @@ def cut(
         if bins <= 0:
             raise ValueError("Number of bins must be positive")
 
-        # Calculate bin edges
-        min_val = pl_series.min()
-        max_val = pl_series.max()
+        # Calculate bin edges - cast to float for arithmetic operations
+        min_val_raw = pl_series.min()
+        max_val_raw = pl_series.max()
+
+        # Type guard: ensure we have numeric values for arithmetic
+        min_val = float(min_val_raw) if min_val_raw is not None else 0.0  # type: ignore[arg-type]
+        max_val = float(max_val_raw) if max_val_raw is not None else 0.0  # type: ignore[arg-type]
 
         if min_val == max_val:
             # All values are the same
+            list_len = len(pl_series)
             if labels:
-                result = pl.Series([labels[0]] * len(x))
+                result = pl.Series([labels[0]] * list_len)
             else:
-                result = pl.Series([f"({min_val}, {max_val}]"] * len(x))
+                result = pl.Series([f"({min_val}, {max_val}]"] * list_len)
             return Series(result)
 
         # Create equal-width bins
@@ -239,23 +261,27 @@ def cut(
         bin_edges = [min_val + bin_width * i for i in range(bins + 1)]
 
         # Manually bin the data
-        result_categories = []
-        for val in x:
+        result_cats: List[Optional[str]] = []
+        pl_list = pl_series.to_list()
+        for val in pl_list:
             if val is None:
-                result_categories.append(None)
+                result_cats.append(None)
             else:
-                # Find which bin this value falls into
-                bin_idx = min(int((val - min_val) / bin_width), bins - 1)
+                # Find which bin this value falls into - cast val to float for arithmetic
+                val_float = float(val) if val is not None else 0.0
+                bin_idx = min(int((val_float - min_val) / bin_width), bins - 1)
 
                 if labels:
                     if bin_idx < len(labels):
-                        result_categories.append(labels[bin_idx])
+                        result_cats.append(labels[bin_idx])
                     else:
-                        result_categories.append(labels[-1])
+                        result_cats.append(labels[-1])
                 else:
-                    result_categories.append(f"({bin_edges[bin_idx]:.2f}, {bin_edges[bin_idx + 1]:.2f}]")
+                    result_cats.append(
+                        f"({bin_edges[bin_idx]:.2f}, {bin_edges[bin_idx + 1]:.2f}]"
+                    )
 
-        return Series(pl.Series(result_categories))
+        return Series(pl.Series(result_cats))
     else:
         raise TypeError(f"bins must be int or list, got {type(bins)}")
 

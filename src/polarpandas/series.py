@@ -2,6 +2,8 @@
 Series implementation wrapping Polars Series with pandas-like API.
 """
 
+from __future__ import annotations
+
 import builtins
 import contextlib
 import sys
@@ -12,7 +14,9 @@ from typing import (
     Dict,
     Iterator,
     List,
+    Optional,
     Tuple,
+    Union,
 )
 
 import polars as pl
@@ -223,7 +227,7 @@ class Series:
                 return self._series[idx]
             except (ValueError, AttributeError):
                 # Fall back to Polars Series behavior
-                return self._series[key]
+                return self._series[key]  # type: ignore[index]
         # Handle slicing and other cases
         else:
             return self._series[key]
@@ -243,48 +247,48 @@ class Series:
         return len(self._series)
 
     # Arithmetic operations
-    def __add__(self, other: Any) -> "Series":
+    def __add__(self, other: Any) -> Series:
         """Add Series or scalar."""
         if isinstance(other, Series):
             return Series(self._series + other._series)
         return Series(self._series + other)
 
-    def __sub__(self, other: Any) -> "Series":
+    def __sub__(self, other: Any) -> Series:
         """Subtract Series or scalar."""
         if isinstance(other, Series):
             return Series(self._series - other._series)
         return Series(self._series - other)
 
-    def __mul__(self, other: Any) -> "Series":
+    def __mul__(self, other: Any) -> Series:
         """Multiply Series or scalar."""
         if isinstance(other, Series):
             return Series(self._series * other._series)
         return Series(self._series * other)
 
-    def __truediv__(self, other: Any) -> "Series":
+    def __truediv__(self, other: Any) -> Series:
         """Divide Series or scalar."""
         if isinstance(other, Series):
             return Series(self._series / other._series)
         return Series(self._series / other)
 
-    def __radd__(self, other: Any) -> "Series":
+    def __radd__(self, other: Any) -> Series:
         """Right add (for scalar + Series)."""
-        return Series(other + self._series)  # type: ignore[arg-type]
+        return Series(other + self._series)
 
-    def __rsub__(self, other: Any) -> "Series":
+    def __rsub__(self, other: Any) -> Series:
         """Right subtract (for scalar - Series)."""
-        return Series(other - self._series)  # type: ignore[arg-type]
+        return Series(other - self._series)
 
-    def __rmul__(self, other: Any) -> "Series":
+    def __rmul__(self, other: Any) -> Series:
         """Right multiply (for scalar * Series)."""
-        return Series(other * self._series)  # type: ignore[arg-type]
+        return Series(other * self._series)
 
-    def __rtruediv__(self, other: Any) -> "Series":
+    def __rtruediv__(self, other: Any) -> Series:
         """Right divide (for scalar / Series)."""
-        return Series(other / self._series)  # type: ignore[arg-type]
+        return Series(other / self._series)
 
     # Comparison operators
-    def __gt__(self, other: Any) -> "Series":
+    def __gt__(self, other: Any) -> Series:
         """Greater than comparison."""
         if isinstance(other, Series):
             result = Series(self._series > other._series)
@@ -294,7 +298,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __lt__(self, other: Any) -> "Series":
+    def __lt__(self, other: Any) -> Series:
         """Less than comparison."""
         if isinstance(other, Series):
             result = Series(self._series < other._series)
@@ -303,7 +307,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __ge__(self, other: Any) -> "Series":
+    def __ge__(self, other: Any) -> Series:
         """Greater than or equal comparison."""
         if isinstance(other, Series):
             result = Series(self._series >= other._series)
@@ -312,7 +316,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __le__(self, other: Any) -> "Series":
+    def __le__(self, other: Any) -> Series:
         """Less than or equal comparison."""
         if isinstance(other, Series):
             result = Series(self._series <= other._series)
@@ -321,7 +325,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __eq__(self, other: Any) -> "Series":  # type: ignore[override]
+    def __eq__(self, other: Any) -> Series:  # type: ignore[override]
         """Equal comparison."""
         if isinstance(other, Series):
             result = Series(self._series == other._series)
@@ -330,7 +334,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __ne__(self, other: Any) -> "Series":  # type: ignore[override]
+    def __ne__(self, other: Any) -> Series:  # type: ignore[override]
         """Not equal comparison."""
         if isinstance(other, Series):
             result = Series(self._series != other._series)
@@ -345,7 +349,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return addition of Series and other, element-wise (binary operator +).
 
@@ -382,7 +386,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return subtraction of Series and other, element-wise (binary operator -).
 
@@ -419,7 +423,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return subtraction of Series and other, element-wise (binary operator -).
 
@@ -432,7 +436,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return multiplication of Series and other, element-wise (binary operator *).
 
@@ -469,7 +473,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return multiplication of Series and other, element-wise (binary operator *).
 
@@ -482,7 +486,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return floating division of Series and other, element-wise (binary operator /).
 
@@ -519,7 +523,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return floating division of Series and other, element-wise (binary operator /).
 
@@ -532,7 +536,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return modulo of Series and other, element-wise (binary operator %).
 
@@ -569,7 +573,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return exponential power of Series and other, element-wise (binary operator **).
 
@@ -606,7 +610,7 @@ class Series:
         self,
         other: Any,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return equal to of Series and other, element-wise (binary operator ==).
 
@@ -628,7 +632,7 @@ class Series:
         self,
         other: Any,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return not equal to of Series and other, element-wise (binary operator !=).
 
@@ -650,7 +654,7 @@ class Series:
         self,
         other: Any,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return greater than of Series and other, element-wise (binary operator >).
 
@@ -672,7 +676,7 @@ class Series:
         self,
         other: Any,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return less than of Series and other, element-wise (binary operator <).
 
@@ -694,7 +698,7 @@ class Series:
         self,
         other: Any,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return greater than or equal to of Series and other, element-wise (binary operator >=).
 
@@ -716,7 +720,7 @@ class Series:
         self,
         other: Any,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return less than or equal to of Series and other, element-wise (binary operator <=).
 
@@ -736,17 +740,17 @@ class Series:
 
     # Accessor properties
     @property
-    def str(self) -> "_StringAccessor":
+    def str(self) -> _StringAccessor:
         """String accessor for string operations."""
         return _StringAccessor(self)
 
     @property
-    def dt(self) -> "_DatetimeAccessor":
+    def dt(self) -> _DatetimeAccessor:
         """Datetime accessor for datetime operations."""
         return _DatetimeAccessor(self)
 
     # Methods
-    def apply(self, func: Callable[..., Any]) -> "Series":
+    def apply(self, func: Callable[..., Any]) -> Series:
         """
         Apply a function to each element.
 
@@ -762,7 +766,7 @@ class Series:
         """
         return Series(self._series.map_elements(func, return_dtype=pl.Float64))
 
-    def map(self, arg: Any) -> "Series":
+    def map(self, arg: Any) -> Series:
         """
         Map values using a dictionary or function.
 
@@ -781,9 +785,9 @@ class Series:
             return Series(self._series.replace(arg, default=None))
         else:
             # Use map_elements for functions
-            return Series(self._series.map_elements(arg, return_dtype=pl.Float64))  # type: ignore[arg-type]
+            return Series(self._series.map_elements(arg, return_dtype=pl.Float64))
 
-    def isna(self) -> "Series":
+    def isna(self) -> Series:
         """
         Detect missing values.
 
@@ -794,7 +798,7 @@ class Series:
         """
         return Series(self._series.is_null())
 
-    def notna(self) -> "Series":
+    def notna(self) -> Series:
         """
         Detect non-missing values.
 
@@ -809,8 +813,8 @@ class Series:
         self,
         left: Any,
         right: Any,
-        inclusive: str = "both",
-    ) -> "Series":
+        inclusive: str = "both",  # type: ignore[valid-type]
+    ) -> Series:
         """
         Check if values are between bounds.
 
@@ -853,7 +857,7 @@ class Series:
                 "inclusive must be one of 'both', 'neither', 'left', 'right'"
             )
 
-    def clip(self, lower: Any = None, upper: Any = None) -> "Series":
+    def clip(self, lower: Any = None, upper: Any = None) -> Series:
         """
         Trim values at thresholds.
 
@@ -882,7 +886,7 @@ class Series:
         ascending: bool = True,
         na_option: builtins.str = "keep",
         pct: bool = False,
-    ) -> "Series":
+    ) -> Series:
         """
         Compute numerical ranks.
 
@@ -1067,7 +1071,7 @@ class Series:
         """
         return self._series.median()
 
-    def astype(self, dtype: Any, errors: str = "raise", **kwargs: Any) -> "Series":
+    def astype(self, dtype: Any, errors: str = "raise", **kwargs: Any) -> Series:  # type: ignore[valid-type]
         """
         Cast a pandas object to a specified dtype.
 
@@ -1176,7 +1180,7 @@ class Series:
         periods: int = 1,
         freq: Any = None,
         fill_value: Any = None,
-    ) -> "Series":
+    ) -> Series:
         """
         Shift index by desired number of periods with an optional time freq.
 
@@ -1197,7 +1201,7 @@ class Series:
         result_series = self._series.shift(periods, fill_value=fill_value)
         return Series(result_series)
 
-    def diff(self, periods: int = 1, **kwargs: Any) -> "Series":
+    def diff(self, periods: int = 1, **kwargs: Any) -> Series:
         """
         Calculate the first discrete difference of element.
 
@@ -1223,7 +1227,7 @@ class Series:
         limit: Any = None,
         freq: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Calculate the percentage change between the current and a prior element.
 
@@ -1250,7 +1254,7 @@ class Series:
         result_series = (self._series - shifted) / shifted
         return Series(result_series, index=self._index)
 
-    def cumsum(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> "Series":
+    def cumsum(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> Series:
         """
         Return cumulative sum over a Series.
 
@@ -1271,7 +1275,7 @@ class Series:
         result_series = self._series.cum_sum()
         return Series(result_series, index=self._index)
 
-    def cummax(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> "Series":
+    def cummax(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> Series:
         """
         Return cumulative maximum over a Series.
 
@@ -1292,7 +1296,7 @@ class Series:
         result_series = self._series.cum_max()
         return Series(result_series, index=self._index)
 
-    def cummin(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> "Series":
+    def cummin(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> Series:
         """
         Return cumulative minimum over a Series.
 
@@ -1313,7 +1317,7 @@ class Series:
         result_series = self._series.cum_min()
         return Series(result_series, index=self._index)
 
-    def cumprod(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> "Series":
+    def cumprod(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> Series:
         """
         Return cumulative product over a Series.
 
@@ -1498,7 +1502,7 @@ class Series:
             return self._index[min_idx]
         return min_idx
 
-    def round(self, decimals: int = 0, **kwargs: Any) -> "Series":
+    def round(self, decimals: int = 0, **kwargs: Any) -> Series:
         """
         Round each value in a Series to the given number of decimals.
 
@@ -1522,7 +1526,7 @@ class Series:
         ascending: bool = True,
         inplace: bool = False,
         kind: Any = None,
-        na_position: str = "last",
+        na_position: str = "last",  # type: ignore[valid-type]
         sort_remaining: bool = True,
         ignore_index: bool = False,
         key: Any = None,
@@ -1602,7 +1606,7 @@ class Series:
         else:
             return Series(result_series, index=new_index)
 
-    def isnull(self) -> "Series":
+    def isnull(self) -> Series:
         """
         Detect missing values (alias for isna()).
 
@@ -1613,7 +1617,7 @@ class Series:
         """
         return self.isna()
 
-    def notnull(self) -> "Series":
+    def notnull(self) -> Series:
         """
         Detect non-missing values (alias for notna()).
 
@@ -1624,7 +1628,7 @@ class Series:
         """
         return self.notna()
 
-    def abs(self, **kwargs: Any) -> "Series":
+    def abs(self, **kwargs: Any) -> Series:
         """
         Return a Series with absolute numeric value of each element.
 
@@ -1802,7 +1806,7 @@ class Series:
         columns: Any = None,
         level: Any = None,
         inplace: bool = False,
-        errors: str = "raise",
+        errors: str = "raise",  # type: ignore[valid-type]
         **kwargs: Any,
     ) -> Any:
         """
@@ -1853,13 +1857,13 @@ class Series:
                     i for i in range(len(self._series)) if i not in positions_to_drop
                 ]
                 if not keep_positions:
-                    result_series = pl.Series(
+                    result_series = pl.Series(  # type: ignore[misc]
                         [], dtype=self._series.dtype, name=self._series.name
                     )
                     new_index = []
                 else:
                     series_list = self._series.to_list()
-                    result_series = pl.Series(
+                    result_series = pl.Series(  # type: ignore[misc]
                         [series_list[i] for i in keep_positions], name=self._series.name
                     )
                     new_index = keep_positions
@@ -1881,12 +1885,12 @@ class Series:
                     keep_values.append(series_list[i])
 
             if len(keep_values) == 0:
-                result_series = pl.Series(
+                result_series = pl.Series(  # type: ignore[misc]
                     [], dtype=self._series.dtype, name=self._series.name
                 )
                 new_index = []
             else:
-                result_series = pl.Series(keep_values, name=self._series.name)
+                result_series = pl.Series(keep_values, name=self._series.name)  # type: ignore[misc]
                 new_index = keep_indices
 
         if inplace:
@@ -1896,7 +1900,7 @@ class Series:
         else:
             return Series(result_series, index=new_index)
 
-    def duplicated(self, keep: Any = "first", **kwargs: Any) -> "Series":
+    def duplicated(self, keep: Any = "first", **kwargs: Any) -> Series:
         """
         Indicate duplicate Series values.
 
@@ -1931,7 +1935,7 @@ class Series:
 
         return Series(result_series, index=self._index)
 
-    def equals(self, other: "Series") -> bool:
+    def equals(self, other: Series) -> bool:
         """
         Test whether two Series contain the same elements.
 
@@ -1946,7 +1950,7 @@ class Series:
             True if the Series contain the same elements, False otherwise.
         """
         if not isinstance(other, Series):
-            return False
+            return False  # type: ignore[unreachable]
 
         # Compare values
         if len(self._series) != len(other._series):
@@ -1961,7 +1965,7 @@ class Series:
             other_list = other._series.to_list()
             return self_list == other_list
 
-    def explode(self, ignore_index: bool = False, **kwargs: Any) -> "Series":
+    def explode(self, ignore_index: bool = False, **kwargs: Any) -> Series:
         """
         Transform each element of a list-like to a row.
 
@@ -2061,7 +2065,7 @@ class Series:
         regex: Any = None,
         axis: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Subset the Series according to the filter.
 
@@ -2110,12 +2114,12 @@ class Series:
                 keep_values.append(series_list[i])
 
         if len(keep_values) == 0:
-            result_series = pl.Series(
+            result_series = pl.Series(  # type: ignore[misc]
                 [], dtype=self._series.dtype, name=self._series.name
             )
             new_index = []
         else:
-            result_series = pl.Series(keep_values, name=self._series.name)
+            result_series = pl.Series(keep_values, name=self._series.name)  # type: ignore[misc]
             new_index = keep_indices
 
         return Series(result_series, index=new_index)
@@ -2165,7 +2169,7 @@ class Series:
         other: Any,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return integer division of Series and other, element-wise (binary operator //).
 
@@ -2229,7 +2233,7 @@ class Series:
 
         return default
 
-    def isin(self, values: Any) -> "Series":
+    def isin(self, values: Any) -> Series:
         """
         Whether elements in Series are contained in values.
 
@@ -2259,7 +2263,7 @@ class Series:
         include: Any = None,
         exclude: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Generate descriptive statistics.
 
@@ -2285,17 +2289,17 @@ class Series:
         stats = {}
         stats["count"] = float(self._series.count())
         mean_val = self._series.mean()
-        stats["mean"] = float(mean_val) if mean_val is not None else None
+        stats["mean"] = float(mean_val) if mean_val is not None else None  # type: ignore[assignment,arg-type]
         std_val = self._series.std()
-        stats["std"] = float(std_val) if std_val is not None else None
+        stats["std"] = float(std_val) if std_val is not None else None  # type: ignore[assignment,arg-type]
         min_val = self._series.min()
-        stats["min"] = float(min_val) if min_val is not None else None
+        stats["min"] = float(min_val) if min_val is not None else None  # type: ignore[assignment,arg-type]
         max_val = self._series.max()
-        stats["max"] = float(max_val) if max_val is not None else None
+        stats["max"] = float(max_val) if max_val is not None else None  # type: ignore[assignment,arg-type]
 
         for p in percentiles:
             q_val = self._series.quantile(p)
-            stats[f"{int(p * 100)}%"] = float(q_val) if q_val is not None else None
+            stats[f"{int(p * 100)}%"] = float(q_val) if q_val is not None else None  # type: ignore[assignment]
 
         # Create result Series - convert all to float for consistency
         series_name = self._series.name if self._series.name is not None else ""
@@ -2305,7 +2309,7 @@ class Series:
     def quantile(
         self,
         q: Any = 0.5,
-        interpolation: str = "linear",
+        interpolation: str = "linear",  # type: ignore[valid-type]
         numeric_only: Any = None,
         **kwargs: Any,
     ) -> Any:
@@ -2331,7 +2335,7 @@ class Series:
         if isinstance(q, (list, tuple)):
             # Multiple quantiles
             quantiles = [self._series.quantile(q_val) for q_val in q]
-            result_series = pl.Series(quantiles, name=self._series.name)
+            result_series = pl.Series(quantiles, name=self._series.name)  # type: ignore[misc]
             return Series(result_series, index=q)
         else:
             # Single quantile
@@ -2752,7 +2756,7 @@ class Series:
             # Note: Index preservation is limited in pure Polars
             return result
 
-    def head(self, n: int = 5) -> "Series":
+    def head(self, n: int = 5) -> Series:
         """
         Return the first n elements.
 
@@ -2774,7 +2778,7 @@ class Series:
             index = list(range(min(n, len(self._series))))
         return Series(result_series, index=index)
 
-    def tail(self, n: int = 5) -> "Series":
+    def tail(self, n: int = 5) -> Series:
         """
         Return the last n elements.
 
@@ -2816,7 +2820,7 @@ class Series:
         """
         return self.to_list()
 
-    def to_frame(self, name: Any = None) -> "DataFrame":
+    def to_frame(self, name: Any = None) -> DataFrame:
         """
         Convert Series to DataFrame.
 
@@ -2847,7 +2851,7 @@ class Series:
         ascending: bool = False,
         bins: Any = None,
         dropna: bool = True,
-    ) -> "Series":
+    ) -> Series:
         """
         Return a Series containing counts of unique values.
 
@@ -2886,9 +2890,9 @@ class Series:
             total = len(self._series)
             result = result.with_columns([pl.col("count") / total])
 
-        return Series(result)  # type: ignore[arg-type]
+        return Series(result)
 
-    def unique(self) -> "Series":
+    def unique(self) -> Series:
         """
         Return unique values in the series.
 
@@ -2899,7 +2903,7 @@ class Series:
         """
         return Series(self._series.unique())
 
-    def copy(self) -> "Series":
+    def copy(self) -> Series:
         """
         Make a copy of the Series.
 
@@ -2983,14 +2987,14 @@ class Series:
     def to_csv(
         self,
         path_or_buf: Any = None,
-        sep: str = ",",
-        na_rep: str = "",
+        sep: str = ",",  # type: ignore[valid-type]
+        na_rep: str = "",  # type: ignore[valid-type]
         float_format: Any = None,
         columns: Any = None,
         header: Any = True,
         index: bool = True,
         index_label: Any = None,
-        mode: str = "w",
+        mode: str = "w",  # type: ignore[valid-type]
         encoding: Any = None,
         compression: Any = None,
         quoting: Any = None,
@@ -2999,7 +3003,7 @@ class Series:
         date_format: Any = None,
         doublequote: bool = True,
         escapechar: Any = None,
-        decimal: str = ".",
+        decimal: str = ".",  # type: ignore[valid-type]
         **kwargs: Any,
     ) -> Any:
         """
@@ -3100,7 +3104,7 @@ class Series:
     def to_string(
         self,
         buf: Any = None,
-        na_rep: str = "NaN",
+        na_rep: str = "NaN",  # type: ignore[valid-type]
         float_format: Any = None,
         header: bool = True,
         index: bool = True,
@@ -3206,7 +3210,7 @@ class Series:
         copy: bool = True,
         inplace: bool = False,
         level: Any = None,
-        errors: str = "ignore",
+        errors: str = "ignore",  # type: ignore[valid-type]
         **kwargs: Any,
     ) -> Any:
         """
@@ -3259,7 +3263,7 @@ class Series:
             else:
                 # Scalar - rename the Series name
                 new_name = str(index)
-                result_series = pl.Series(self._series.to_list(), name=new_name)
+                result_series = pl.Series(self._series.to_list(), name=new_name)  # type: ignore[misc]
                 if inplace:
                     self._series = result_series
                     return None
@@ -3328,7 +3332,7 @@ class Series:
                 index_name: index_values,
                 self._series.name or 0: self._series.to_list(),
             }
-            result = DataFrame(df_data)
+            result = DataFrame(df_data)  # type: ignore[assignment,arg-type]
             if inplace:
                 # For inplace, convert to Series with reset index
                 self._index = list(range(len(self._series)))
@@ -3375,7 +3379,7 @@ class Series:
 
         return pandas_series
 
-    def add_prefix(self, prefix: str) -> "Series":
+    def add_prefix(self, prefix: str) -> Series:  # type: ignore[valid-type]
         """
         Prefix labels with string prefix.
 
@@ -3396,7 +3400,7 @@ class Series:
             # For non-string, convert to string first
             return Series(prefix + self._series.cast(pl.Utf8))
 
-    def add_suffix(self, suffix: str) -> "Series":
+    def add_suffix(self, suffix: str) -> Series:  # type: ignore[valid-type]
         """
         Suffix labels with string suffix.
 
@@ -3465,11 +3469,11 @@ class Series:
 
     def align(
         self,
-        other: "Series",
-        join: str = "outer",
+        other: Series,
+        join: str = "outer",  # type: ignore[valid-type]
         axis: Any = None,
         **kwargs: Any,
-    ) -> Tuple["Series", "Series"]:
+    ) -> Tuple[Series, Series]:
         """
         Align two Series on their index.
 
@@ -3576,10 +3580,10 @@ class Series:
     def argsort(
         self,
         axis: int = 0,
-        kind: str = "quicksort",
+        kind: str = "quicksort",  # type: ignore[valid-type]
         order: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Return the integer indices that would sort the Series values.
 
@@ -3605,12 +3609,12 @@ class Series:
 
     def compare(
         self,
-        other: "Series",
+        other: Series,
         align_axis: int = 1,
         keep_shape: bool = False,
         keep_equal: bool = False,
         result_names: Any = None,
-    ) -> "DataFrame":
+    ) -> DataFrame:
         """
         Compare to another Series and show the differences.
 
@@ -3670,10 +3674,10 @@ class Series:
 
     def combine(
         self,
-        other: "Series",
+        other: Series,
         func: Callable[[Any, Any], Any],
         fill_value: Any = None,
-    ) -> "Series":
+    ) -> Series:
         """
         Combine the Series with another Series using a function.
 
@@ -3722,7 +3726,7 @@ class Series:
             combined_values, index=aligned_self._index if aligned_self._index else None
         )
 
-    def combine_first(self, other: "Series") -> "Series":
+    def combine_first(self, other: Series) -> Series:
         """
         Combine Series values, choosing the calling Series's values first.
 
@@ -3774,8 +3778,8 @@ class Series:
 
     def corr(
         self,
-        other: "Series",
-        method: str = "pearson",
+        other: Series,
+        method: str = "pearson",  # type: ignore[valid-type]
         min_periods: Any = None,
     ) -> float:
         """
@@ -3802,7 +3806,7 @@ class Series:
 
     def cov(
         self,
-        other: "Series",
+        other: Series,
         min_periods: Any = None,
         ddof: Any = None,
     ) -> float:
@@ -3827,7 +3831,7 @@ class Series:
         mean_self = self._series.mean()
         mean_other = other._series.mean()
         cov = ((self._series - mean_self) * (other._series - mean_other)).mean()
-        return cov if cov is not None else float("nan")
+        return cov if cov is not None else float("nan")  # type: ignore[return-value]
 
     def divmod(
         self,
@@ -3835,7 +3839,7 @@ class Series:
         fill_value: Any = None,
         axis: int = 0,
         level: Any = None,
-    ) -> Tuple["Series", "Series"]:
+    ) -> Tuple[Series, Series]:
         """
         Return integer division and modulo of division.
 
@@ -3869,7 +3873,7 @@ class Series:
         fill_value: Any = None,
         axis: int = 0,
         level: Any = None,
-    ) -> Tuple["Series", "Series"]:
+    ) -> Tuple[Series, Series]:
         """
         Return integer division and modulo of division (reverse).
 
@@ -3963,8 +3967,8 @@ class Series:
     def to_excel(
         self,
         excel_writer: Any,
-        sheet_name: str = "Sheet1",
-        na_rep: str = "",
+        sheet_name: str = "Sheet1",  # type: ignore[valid-type]
+        na_rep: str = "",  # type: ignore[valid-type]
         float_format: Any = None,
         columns: Any = None,
         header: Any = True,
@@ -3975,7 +3979,7 @@ class Series:
         engine: Any = None,
         merge_cells: bool = True,
         encoding: Any = None,
-        inf_rep: str = "inf",
+        inf_rep: str = "inf",  # type: ignore[valid-type]
         verbose: bool = True,
         freeze_panes: Any = None,
         storage_options: Any = None,
@@ -3984,7 +3988,7 @@ class Series:
         """Write Series to Excel file."""
         from .frame import DataFrame
 
-        df = DataFrame({self.name or 0: self._series})
+        df = DataFrame({self.name or 0: self._series})  # type: ignore[dict-item]
         df.to_excel(
             excel_writer=excel_writer,
             sheet_name=sheet_name,
@@ -4008,8 +4012,8 @@ class Series:
     def to_hdf(
         self,
         path_or_buf: Any,
-        key: str,
-        mode: str = "a",
+        key: str,  # type: ignore[valid-type]
+        mode: str = "a",  # type: ignore[valid-type]
         complevel: Any = None,
         complib: Any = None,
         append: bool = False,
@@ -4019,14 +4023,14 @@ class Series:
         nan_rep: Any = None,
         dropna: Any = None,
         data_columns: Any = None,
-        errors: str = "strict",
-        encoding: str = "UTF-8",
+        errors: str = "strict",  # type: ignore[valid-type]
+        encoding: str = "UTF-8",  # type: ignore[valid-type]
         **kwargs: Any,
     ) -> None:
         """Write Series to HDF5 file."""
         from .frame import DataFrame
 
-        df = DataFrame({self.name or 0: self._series}, index=self._index)
+        df = DataFrame({self.name or 0: self._series}, index=self._index)  # type: ignore[dict-item]
         df.to_hdf(
             path_or_buf=path_or_buf,
             key=key,
@@ -4048,24 +4052,24 @@ class Series:
     def to_json(
         self,
         path_or_buf: Any = None,
-        orient: str = "records",
-        date_format: str = "epoch",
+        orient: str = "records",  # type: ignore[valid-type]
+        date_format: str = "epoch",  # type: ignore[valid-type]
         double_precision: int = 10,
         force_ascii: bool = True,
-        date_unit: str = "ms",
+        date_unit: str = "ms",  # type: ignore[valid-type]
         default_handler: Any = None,
         lines: bool = False,
         compression: Any = None,
         index: bool = True,
         indent: Any = None,
         storage_options: Any = None,
-        mode: str = "w",
+        mode: str = "w",  # type: ignore[valid-type]
         **kwargs: Any,
     ) -> Any:
         """Convert Series to JSON string."""
         import json
 
-        data = self._series.to_dict(as_series=False)
+        data = self._series.to_dict(as_series=False)  # type: ignore[attr-defined]
         if index and self._index:
             result = {str(k): v for k, v in zip(self._index, data[self.name or 0])}
         else:
@@ -4087,7 +4091,7 @@ class Series:
         columns: Any = None,
         header: bool = True,
         index: bool = True,
-        na_rep: str = "NaN",
+        na_rep: str = "NaN",  # type: ignore[valid-type]
         formatters: Any = None,
         float_format: Any = None,
         sparsify: Any = None,
@@ -4097,7 +4101,7 @@ class Series:
         longtable: bool = False,
         escape: bool = True,
         encoding: Any = None,
-        decimal: str = ".",
+        decimal: str = ".",  # type: ignore[valid-type]
         multicolumn: Any = None,
         multicolumn_format: Any = None,
         multirow: Any = None,
@@ -4109,7 +4113,7 @@ class Series:
         """Render Series to LaTeX table."""
         from .frame import DataFrame
 
-        df = DataFrame({self.name or 0: self._series}, index=self._index)
+        df = DataFrame({self.name or 0: self._series}, index=self._index)  # type: ignore[dict-item]
         return df.to_latex(
             buf=buf,
             header=header,
@@ -4124,7 +4128,7 @@ class Series:
     def to_markdown(
         self,
         buf: Any = None,
-        mode: str = "wt",
+        mode: str = "wt",  # type: ignore[valid-type]
         index: bool = True,
         storage_options: Any = None,
         **kwargs: Any,
@@ -4132,14 +4136,14 @@ class Series:
         """Print Series in Markdown-friendly format."""
         from .frame import DataFrame
 
-        df = DataFrame({self.name or 0: self._series}, index=self._index)
+        df = DataFrame({self.name or 0: self._series}, index=self._index)  # type: ignore[dict-item]
         return df.to_markdown(
             buf=buf, mode=mode, index=index, storage_options=storage_options, **kwargs
         )
 
     def to_pickle(
         self,
-        path: str,
+        path: str,  # type: ignore[valid-type]
         compression: Any = None,
         protocol: Any = None,
         storage_options: Any = None,
@@ -4155,28 +4159,89 @@ class Series:
         elif compression:
             raise ValueError(f"Unsupported compression: {compression}")
         else:
-            opener = open
+            opener = open  # type: ignore[assignment]
             mode = "wb"
         with opener(path, mode) as f:
-            pickle.dump(self, f, protocol=protocol, **kwargs)
+            pickle.dump(self, f, protocol=protocol, **kwargs)  # type: ignore[arg-type]
 
     def to_sql(
         self,
-        name: str,
+        name: str,  # type: ignore[valid-type]
         con: Any,
-        schema: Any = None,
-        if_exists: str = "fail",
+        schema: Optional[str] = None,  # type: ignore[valid-type]
+        if_exists: str = "fail",  # type: ignore[valid-type]
         index: bool = True,
-        index_label: Any = None,
-        chunksize: Any = None,
-        dtype: Any = None,
-        method: Any = None,
-        **kwargs: Any,
+        index_label: Optional[Union[str, List[str]]] = None,  # type: ignore[valid-type]
+        chunksize: Optional[int] = None,
+        dtype: Optional[Dict[str, Any]] = None,  # type: ignore[valid-type]
+        method: Optional[Union[str, Callable]] = None,  # type: ignore[valid-type,type-arg]
+        primary_key: Optional[Union[str, List[str]]] = None,  # type: ignore[valid-type]
+        auto_increment: bool = False,
     ) -> None:
-        """Write Series to SQL database."""
+        """
+        Write Series to SQL database.
+
+        This method provides pandas-compatible interface for writing Series to SQL.
+        When primary_key or auto_increment parameters are used, SQLAlchemy is required.
+
+        Parameters
+        ----------
+        name : str
+            Name of SQL table
+        con : sqlalchemy.engine.Engine or sqlite3.Connection
+            Database connection or SQLAlchemy engine
+        schema : str, optional
+            Specify the schema (if database flavor supports this). If None, use
+            default schema.
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists:
+            - fail: Raise a ValueError
+            - replace: Drop the table before inserting new values
+            - append: Insert new values to the existing table
+        index : bool, default True
+            Write DataFrame index as a column. Uses index_label as the column
+            name in the table.
+        index_label : str or list of str, optional
+            Column label for index column(s). If None is given (default) and
+            index is True, then the index names are used.
+        chunksize : int, optional
+            Specify the number of rows in each batch to be written at a time.
+            By default, all rows will be written at once.
+        dtype : dict, optional
+            Specifying the datatype for columns. The keys should be the column
+            names and the values should be SQLAlchemy types.
+        method : {None, 'multi', callable}, optional
+            Controls the SQL insertion clause used:
+            - None: Uses standard SQL INSERT clause (one per row)
+            - 'multi': Pass multiple values in a single INSERT clause
+            - callable: Callable with signature (pd_table, conn, keys, data_iter)
+        primary_key : str or list of str, optional
+            Column name(s) to set as the primary key. Requires SQLAlchemy.
+        auto_increment : bool, default False
+            If True, the primary key column will be set to auto-increment.
+            Requires SQLAlchemy and primary_key to be specified.
+
+        Raises
+        ------
+        ValueError
+            If table exists and if_exists is 'fail'
+        ImportError
+            If SQLAlchemy is required but not installed
+
+        Examples
+        --------
+        >>> from sqlalchemy import create_engine
+        >>> engine = create_engine('sqlite:///example.db')
+        >>> series = ppd.Series([1, 2, 3], name='values')
+        >>> series.to_sql('my_table', engine)
+
+        Notes
+        -----
+        Converts the Series to a DataFrame with one column and calls DataFrame.to_sql()
+        """
         from .frame import DataFrame
 
-        df = DataFrame({self.name or 0: self._series}, index=self._index)
+        df = DataFrame({self.name or 0: self._series}, index=self._index)  # type: ignore[dict-item]
         df.to_sql(
             name=name,
             con=con,
@@ -4187,7 +4252,8 @@ class Series:
             chunksize=chunksize,
             dtype=dtype,
             method=method,
-            **kwargs,
+            primary_key=primary_key,
+            auto_increment=auto_increment,
         )
 
     def to_xarray(self, dim_order: Any = None, **kwargs: Any) -> Any:
@@ -4216,39 +4282,39 @@ class Series:
             ) from None
 
     # Arithmetic methods (right operations)
-    def radd(self, other: Any, **kwargs: Any) -> "Series":
+    def radd(self, other: Any, **kwargs: Any) -> Series:
         """Right addition: other + self."""
         return Series(other + self._series)
 
-    def rdiv(self, other: Any, **kwargs: Any) -> "Series":
+    def rdiv(self, other: Any, **kwargs: Any) -> Series:
         """Right division: other / self."""
         return Series(other / self._series)
 
-    def rfloordiv(self, other: Any, **kwargs: Any) -> "Series":
+    def rfloordiv(self, other: Any, **kwargs: Any) -> Series:
         """Right floor division: other // self."""
         return Series(other // self._series)
 
-    def rmod(self, other: Any, **kwargs: Any) -> "Series":
+    def rmod(self, other: Any, **kwargs: Any) -> Series:
         """Right modulo: other % self."""
         return Series(other % self._series)
 
-    def rmul(self, other: Any, **kwargs: Any) -> "Series":
+    def rmul(self, other: Any, **kwargs: Any) -> Series:
         """Right multiplication: other * self."""
         return Series(other * self._series)
 
-    def rpow(self, other: Any, **kwargs: Any) -> "Series":
+    def rpow(self, other: Any, **kwargs: Any) -> Series:
         """Right power: other ** self."""
         return Series(other**self._series)
 
-    def rsub(self, other: Any, **kwargs: Any) -> "Series":
+    def rsub(self, other: Any, **kwargs: Any) -> Series:
         """Right subtraction: other - self."""
         return Series(other - self._series)
 
-    def rtruediv(self, other: Any, **kwargs: Any) -> "Series":
+    def rtruediv(self, other: Any, **kwargs: Any) -> Series:
         """Right true division: other / self."""
         return Series(other / self._series)
 
-    def truediv(self, other: Any, **kwargs: Any) -> "Series":
+    def truediv(self, other: Any, **kwargs: Any) -> Series:
         """True division: self / other."""
         if isinstance(other, Series):
             return Series(self._series / other._series)
@@ -4266,7 +4332,7 @@ class Series:
         ignore_na: bool = False,
         axis: int = 0,
         times: Any = None,
-        method: str = "single",
+        method: str = "single",  # type: ignore[valid-type]
         **kwargs: Any,
     ) -> Any:
         """Provide exponential weighted functions."""
@@ -4275,7 +4341,11 @@ class Series:
         )
 
     def expanding(
-        self, min_periods: int = 1, axis: int = 0, method: str = "single", **kwargs: Any
+        self,
+        min_periods: int = 1,
+        axis: int = 0,
+        method: str = "single",  # type: ignore[valid-type]
+        **kwargs: Any,
     ) -> Any:
         """Provide expanding window calculations."""
         raise NotImplementedError(
@@ -4292,7 +4362,7 @@ class Series:
         axis: int = 0,
         closed: Any = None,
         step: Any = None,
-        method: str = "single",
+        method: str = "single",  # type: ignore[valid-type]
         **kwargs: Any,
     ) -> Any:
         """Provide rolling window calculations."""
@@ -4308,9 +4378,9 @@ class Series:
         convert_integer: bool = True,
         convert_boolean: bool = True,
         convert_floating: bool = True,
-        dtype_backend: str = "numpy_nullable",
+        dtype_backend: str = "numpy_nullable",  # type: ignore[valid-type]
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Convert to best possible dtypes."""
         return self.copy()
 
@@ -4319,19 +4389,19 @@ class Series:
         level: Any,
         axis: int = 0,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Drop level from MultiIndex."""
         raise NotImplementedError(
             "droplevel() requires MultiIndex. Not yet implemented for simple Series"
         )
 
-    def infer_objects(self, copy: Any = None) -> "Series":
+    def infer_objects(self, copy: Any = None) -> Series:
         """Attempt to infer better dtypes for object columns."""
         return self.copy() if copy else self
 
     def interpolate(
         self,
-        method: str = "linear",
+        method: str = "linear",  # type: ignore[valid-type]
         axis: int = 0,
         limit: Any = None,
         inplace: bool = False,
@@ -4358,7 +4428,7 @@ class Series:
         inplace: bool = False,
         axis: Any = None,
         level: Any = None,
-        errors: str = "raise",
+        errors: str = "raise",  # type: ignore[valid-type]
         try_cast: bool = False,
         **kwargs: Any,
     ) -> Any:
@@ -4368,7 +4438,11 @@ class Series:
 
         # Create a DataFrame with one column to use select
         temp_df = pl.DataFrame({"value": self._series})
-        result_expr = pl.when(cond).then(pl.lit(other) if other is not None else None).otherwise(pl.col("value"))
+        result_expr = (
+            pl.when(cond)
+            .then(pl.lit(other) if other is not None else None)
+            .otherwise(pl.col("value"))
+        )
         result_series = temp_df.select(result_expr).to_series()
 
         if inplace:
@@ -4387,7 +4461,7 @@ class Series:
         limit: Any = None,
         tolerance: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Reindex to new index."""
         if index is None:
             return self.copy() if copy else self
@@ -4397,13 +4471,13 @@ class Series:
 
     def reindex_like(
         self,
-        other: "Series",
+        other: Series,
         method: Any = None,
         copy: bool = True,
         limit: Any = None,
         tolerance: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Reindex like another Series."""
         return self.reindex(
             index=other._index if other._index else None,
@@ -4432,15 +4506,13 @@ class Series:
             return None
         return result
 
-    def reorder_levels(
-        self, order: List[Any], axis: int = 0, **kwargs: Any
-    ) -> "Series":
+    def reorder_levels(self, order: List[Any], axis: int = 0, **kwargs: Any) -> Series:
         """Reorder MultiIndex levels."""
         raise NotImplementedError(
             "reorder_levels() requires MultiIndex. Not yet implemented"
         )
 
-    def repeat(self, repeats: Any, axis: Any = None, **kwargs: Any) -> "Series":
+    def repeat(self, repeats: Any, axis: Any = None, **kwargs: Any) -> Series:
         """Repeat elements."""
         if isinstance(repeats, int):
             # Repeat each element by the given number
@@ -4465,7 +4537,7 @@ class Series:
         axis: Any = None,
         ignore_index: bool = False,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Random sample."""
         if n is None and frac is None:
             n = 1
@@ -4478,7 +4550,7 @@ class Series:
     def searchsorted(
         self,
         value: Any,
-        side: str = "left",
+        side: str = "left",  # type: ignore[valid-type]
         sorter: Any = None,
         **kwargs: Any,
     ) -> Any:
@@ -4513,12 +4585,12 @@ class Series:
         copy: bool = False,
         allows_duplicate_labels: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Set flags."""
         # Polars doesn't have flags, return copy
         return self.copy() if copy else self
 
-    def squeeze(self, axis: Any = None, **kwargs: Any) -> "Series":
+    def squeeze(self, axis: Any = None, **kwargs: Any) -> Series:
         """Squeeze dimensions (no-op for Series)."""
         return self
 
@@ -4528,7 +4600,7 @@ class Series:
         axis: Any = None,
         is_copy: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Take elements by position."""
         if isinstance(indices, (list, tuple)):
             return Series(self._series[indices])
@@ -4540,7 +4612,7 @@ class Series:
         axis: int = 0,
         *args: Any,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Transform with function."""
         if callable(func):
             result = func(self._series)
@@ -4549,7 +4621,7 @@ class Series:
             return Series(pl.Series([result] * len(self)))
         raise ValueError("func must be callable")
 
-    def transpose(self, *args: Any, **kwargs: Any) -> "Series":
+    def transpose(self, *args: Any, **kwargs: Any) -> Series:
         """Transpose (no-op for Series)."""
         return self
 
@@ -4560,7 +4632,7 @@ class Series:
         axis: Any = None,
         copy: bool = True,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Truncate before/after."""
         if self._index:
             start_idx = 0
@@ -4595,11 +4667,11 @@ class Series:
 
     def update(
         self,
-        other: "Series",
-        join: str = "left",
+        other: Series,
+        join: str = "left",  # type: ignore[valid-type]
         overwrite: bool = True,
         filter_func: Any = None,
-        errors: str = "ignore",
+        errors: str = "ignore",  # type: ignore[valid-type]
         **kwargs: Any,
     ) -> None:
         """Update with another Series."""
@@ -4608,7 +4680,7 @@ class Series:
                 if idx in self._index:
                     self_idx = self._index.index(idx)
                     other_idx = other._index.index(idx)
-                    self._series = self._series.set_at_index(
+                    self._series = self._series.set_at_index(  # type: ignore[attr-defined]
                         self_idx, other._series[other_idx]
                     )
 
@@ -4619,7 +4691,7 @@ class Series:
         inplace: bool = False,
         axis: Any = None,
         level: Any = None,
-        errors: str = "raise",
+        errors: str = "raise",  # type: ignore[valid-type]
         try_cast: bool = False,
         **kwargs: Any,
     ) -> Any:
@@ -4629,7 +4701,11 @@ class Series:
 
         # Create a DataFrame with one column to use select
         temp_df = pl.DataFrame({"value": self._series})
-        result_expr = pl.when(cond).then(pl.col("value")).otherwise(pl.lit(other) if other is not None else None)
+        result_expr = (
+            pl.when(cond)
+            .then(pl.col("value"))
+            .otherwise(pl.lit(other) if other is not None else None)
+        )
         result_series = temp_df.select(result_expr).to_series()
 
         if inplace:
@@ -4644,7 +4720,7 @@ class Series:
         level: Any = None,
         drop_level: bool = True,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Cross-section."""
         if self._index and key in self._index:
             idx = self._index.index(key)
@@ -4662,7 +4738,7 @@ class Series:
         """List accessor."""
         raise NotImplementedError("list accessor is not yet implemented")
 
-    @property
+    @property  # type: ignore[no-redef]
     def str(self) -> Any:
         """String accessor (already implemented)."""
         from .series import _StringAccessor
@@ -4694,7 +4770,7 @@ class Series:
                 "autocorr() requires numpy. Install: pip install numpy"
             ) from None
 
-    def mode(self, dropna: bool = True, **kwargs: Any) -> "Series":
+    def mode(self, dropna: bool = True, **kwargs: Any) -> Series:
         """Mode value(s)."""
         value_counts = self.value_counts(dropna=dropna)
         if len(value_counts) == 0:
@@ -4707,12 +4783,12 @@ class Series:
             else pl.Series(list(modes.index))
         )
 
-    def nlargest(self, n: int = 5, keep: str = "first", **kwargs: Any) -> "Series":
+    def nlargest(self, n: int = 5, keep: str = "first", **kwargs: Any) -> Series:  # type: ignore[valid-type]
         """N largest values."""
         sorted_series = self._series.sort(descending=True)
         return Series(sorted_series.head(n))
 
-    def nsmallest(self, n: int = 5, keep: str = "first", **kwargs: Any) -> "Series":
+    def nsmallest(self, n: int = 5, keep: str = "first", **kwargs: Any) -> Series:  # type: ignore[valid-type]
         """N smallest values."""
         sorted_series = self._series.sort()
         return Series(sorted_series.head(n))
@@ -4751,7 +4827,7 @@ class Series:
         caselist: List[Tuple[Any, Any]],
         default: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Case when conditions."""
         expr = None
         for condition, value in caselist:
@@ -4760,11 +4836,11 @@ class Series:
             if expr is None:
                 expr = pl.when(condition).then(pl.lit(value))
             else:
-                expr = expr.when(condition).then(pl.lit(value))
+                expr = expr.when(condition).then(pl.lit(value))  # type: ignore[assignment]
         if default is not None:
-            expr = expr.otherwise(pl.lit(default))
+            expr = expr.otherwise(pl.lit(default))  # type: ignore[union-attr,assignment]
         else:
-            expr = expr.otherwise(self._series)
+            expr = expr.otherwise(self._series)  # type: ignore[union-attr,assignment]
         return Series(expr)
 
     def groupby(
@@ -4802,15 +4878,15 @@ class Series:
                 if deep
                 else len(self._index) * 8
             )
-        return size
+        return size  # type: ignore[return-value]
 
-    def pipe(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
+    def pipe(self, func: Callable, *args: Any, **kwargs: Any) -> Any:  # type: ignore[type-arg]
         """Apply function."""
         return func(self, *args, **kwargs)
 
     def plot(
         self,
-        kind: str = "line",
+        kind: str = "line",  # type: ignore[valid-type]
         ax: Any = None,
         figsize: Any = None,
         use_index: bool = True,
@@ -4854,7 +4930,7 @@ class Series:
             return value
         raise KeyError(f"Key {item} not found")
 
-    def sparse(self, **kwargs: Any) -> "Series":
+    def sparse(self, **kwargs: Any) -> Series:
         """Convert to sparse format."""
         raise NotImplementedError(
             "sparse() is not yet implemented. Polars doesn't have native sparse format"
@@ -4866,7 +4942,7 @@ class Series:
         axis: int = 0,
         copy: bool = True,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """Convert to period."""
         raise NotImplementedError(
             "to_period() is not yet implemented. Use pandas: pd_series.to_period(freq) then convert"
@@ -4878,7 +4954,7 @@ class Series:
         j: Any = -1,
         axis: int = 0,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Swap levels i and j in a MultiIndex.
 
@@ -4911,13 +4987,13 @@ class Series:
     # Time series methods
     def asfreq(
         self,
-        freq: str,
+        freq: str,  # type: ignore[valid-type]
         method: Any = None,
         how: Any = None,
         normalize: bool = False,
         fill_value: Any = None,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Convert time series to specified frequency.
 
@@ -4989,7 +5065,7 @@ class Series:
                 return self._series[-1] if len(self._series) > 0 else None
         return self._series[-1] if len(self._series) > 0 else None
 
-    def at_time(self, time: Any, asof: bool = False, **kwargs: Any) -> "Series":
+    def at_time(self, time: Any, asof: bool = False, **kwargs: Any) -> Series:
         """
         Select values at particular time of day.
 
@@ -5025,8 +5101,12 @@ class Series:
         return Series(pl.Series([], dtype=self._series.dtype))
 
     def between_time(
-        self, start_time: Any, end_time: Any, inclusive: str = "both", **kwargs: Any
-    ) -> "Series":
+        self,
+        start_time: Any,
+        end_time: Any,
+        inclusive: str = "both",  # type: ignore[valid-type]
+        **kwargs: Any,
+    ) -> Series:
         """
         Select values between particular times of day.
 
@@ -5076,17 +5156,17 @@ class Series:
 
     def resample(
         self,
-        rule: str,
+        rule: str,  # type: ignore[valid-type]
         axis: int = 0,
         closed: Any = None,
         label: Any = None,
-        convention: str = "start",
+        convention: str = "start",  # type: ignore[valid-type]
         kind: Any = None,
         loffset: Any = None,
         base: Any = None,
         on: Any = None,
         level: Any = None,
-        origin: str = "start_day",
+        origin: str = "start_day",  # type: ignore[valid-type]
         offset: Any = None,
         group_keys: bool = False,
         **kwargs: Any,
@@ -5146,10 +5226,10 @@ class Series:
     def to_timestamp(
         self,
         freq: Any = None,
-        how: str = "start",
+        how: str = "start",  # type: ignore[valid-type]
         copy: bool = True,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Cast to DatetimeIndex of Timestamps, at beginning of period.
 
@@ -5186,7 +5266,7 @@ class Series:
                 else:
                     # Try to parse as datetime
                     new_index = [
-                        pl.datetime.fromisoformat(str(idx))
+                        pl.datetime.fromisoformat(str(idx))  # type: ignore[attr-defined]
                         if isinstance(idx, str)
                         else idx
                         for idx in self._index
@@ -5204,7 +5284,7 @@ class Series:
         level: Any = None,
         copy: bool = True,
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Convert tz-aware axis to target time zone.
 
@@ -5243,7 +5323,7 @@ class Series:
                         new_idx = idx.tz_convert(tz)
                     elif isinstance(idx, pl.Datetime):
                         # Use Polars timezone conversion
-                        new_idx = idx.replace_time_zone(str(tz))
+                        new_idx = idx.replace_time_zone(str(tz))  # type: ignore[attr-defined]
                     else:
                         new_idx = idx
                     new_index.append(new_idx)
@@ -5259,10 +5339,10 @@ class Series:
         axis: int = 0,
         level: Any = None,
         copy: bool = True,
-        ambiguous: str = "raise",
-        nonexistent: str = "raise",
+        ambiguous: str = "raise",  # type: ignore[valid-type]
+        nonexistent: str = "raise",  # type: ignore[valid-type]
         **kwargs: Any,
-    ) -> "Series":
+    ) -> Series:
         """
         Localize tz-naive index to target time zone.
 
@@ -5307,7 +5387,7 @@ class Series:
                         )
                     elif isinstance(idx, pl.Datetime):
                         # Use Polars timezone localization
-                        new_idx = idx.replace_time_zone(str(tz))
+                        new_idx = idx.replace_time_zone(str(tz))  # type: ignore[attr-defined]
                     else:
                         new_idx = idx
                     new_index.append(new_idx)
@@ -5326,24 +5406,24 @@ class _StringAccessor:
     def __init__(self, series: Series):
         self._series = series._series
 
-    def lower(self) -> "Series":
+    def lower(self) -> Series:
         """Convert to lowercase."""
         return Series(self._series.str.to_lowercase())
 
-    def upper(self) -> "Series":
+    def upper(self) -> Series:
         """Convert to uppercase."""
         return Series(self._series.str.to_uppercase())
 
-    def capitalize(self) -> "Series":
+    def capitalize(self) -> Series:
         """Convert first character to uppercase and rest to lowercase."""
         return Series(self._series.str.to_titlecase())
 
-    def casefold(self) -> "Series":
+    def casefold(self) -> Series:
         """Convert to casefolded strings for caseless matching."""
         # Polars doesn't have casefold, use lowercase as approximation
         return Series(self._series.str.to_lowercase())
 
-    def count(self, pat: str, flags: int = 0, **kwargs: Any) -> "Series":
+    def count(self, pat: str, flags: int = 0, **kwargs: Any) -> Series:
         """
         Count occurrences of pattern in each string.
 
@@ -5364,30 +5444,30 @@ class _StringAccessor:
         # Use Polars string count
         return Series(self._series.str.count_matches(pat))
 
-    def contains(self, pat: str) -> "Series":
+    def contains(self, pat: str) -> Series:
         """Check if pattern is contained."""
         # Handle empty series
         if len(self._series) == 0:
             return Series(pl.Series([], dtype=pl.Boolean))
         return Series(self._series.str.contains(pat))
 
-    def startswith(self, pat: str) -> "Series":
+    def startswith(self, pat: str) -> Series:
         """Check if starts with pattern."""
         return Series(self._series.str.starts_with(pat))
 
-    def endswith(self, pat: str) -> "Series":
+    def endswith(self, pat: str) -> Series:
         """Check if ends with pattern."""
         return Series(self._series.str.ends_with(pat))
 
-    def len(self) -> "Series":
+    def len(self) -> Series:
         """Get length of strings."""
         return Series(self._series.str.len_chars())
 
-    def strip(self) -> "Series":
+    def strip(self) -> Series:
         """Strip whitespace."""
         return Series(self._series.str.strip_chars())
 
-    def replace(self, pat: str, repl: str) -> "Series":
+    def replace(self, pat: str, repl: str) -> Series:
         """Replace pattern with replacement."""
         return Series(self._series.str.replace_all(pat, repl))
 
@@ -5486,7 +5566,7 @@ class _StringAccessor:
         start: Any = None,
         stop: Any = None,
         step: Any = None,
-    ) -> "Series":
+    ) -> Series:
         """
         Slice substrings from each element in the Series.
 
@@ -5525,10 +5605,10 @@ class _StringAccessor:
         else:
             length = None
 
-        return Series(self._series.str.slice(start, length))  # type: ignore[arg-type]
+        return Series(self._series.str.slice(start, length))
 
     # Simple String Operations
-    def center(self, width: int, fillchar: str = " ") -> "Series":
+    def center(self, width: int, fillchar: str = " ") -> Series:
         """Center strings in a Series."""
 
         def center_str(s: Any) -> Any:
@@ -5538,27 +5618,27 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(center_str, return_dtype=pl.Utf8))
 
-    def ljust(self, width: int, fillchar: str = " ") -> "Series":
+    def ljust(self, width: int, fillchar: str = " ") -> Series:
         """Left justify strings in a Series."""
         return Series(self._series.str.pad_end(width, fillchar))
 
-    def rjust(self, width: int, fillchar: str = " ") -> "Series":
+    def rjust(self, width: int, fillchar: str = " ") -> Series:
         """Right justify strings in a Series."""
         return Series(self._series.str.pad_start(width, fillchar))
 
-    def lstrip(self, chars: Any = None) -> "Series":
+    def lstrip(self, chars: Any = None) -> Series:
         """Remove leading characters."""
         if chars is None:
             return Series(self._series.str.strip_chars_start())
         return Series(self._series.str.strip_chars_start(chars))
 
-    def rstrip(self, chars: Any = None) -> "Series":
+    def rstrip(self, chars: Any = None) -> Series:
         """Remove trailing characters."""
         if chars is None:
             return Series(self._series.str.strip_chars_end())
         return Series(self._series.str.strip_chars_end(chars))
 
-    def swapcase(self) -> "Series":
+    def swapcase(self) -> Series:
         """Swap case of strings."""
 
         def swap_case(s: Any) -> Any:
@@ -5568,7 +5648,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(swap_case, return_dtype=pl.Utf8))
 
-    def title(self) -> "Series":
+    def title(self) -> Series:
         """Convert strings to title case."""
 
         def title_case(s: Any) -> Any:
@@ -5578,12 +5658,12 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(title_case, return_dtype=pl.Utf8))
 
-    def zfill(self, width: int) -> "Series":
+    def zfill(self, width: int) -> Series:
         """Pad strings with zeros on the left."""
         return Series(self._series.str.zfill(width))
 
     # Character Classification
-    def isalnum(self) -> "Series":
+    def isalnum(self) -> Series:
         """Check if all characters are alphanumeric."""
 
         def check_alnum(s: Any) -> Any:
@@ -5593,7 +5673,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(check_alnum, return_dtype=pl.Boolean))
 
-    def isalpha(self) -> "Series":
+    def isalpha(self) -> Series:
         """Check if all characters are alphabetic."""
 
         def check_alpha(s: Any) -> Any:
@@ -5603,7 +5683,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(check_alpha, return_dtype=pl.Boolean))
 
-    def isascii(self) -> "Series":
+    def isascii(self) -> Series:
         """Check if all characters are ASCII."""
 
         def check_ascii(s: Any) -> Any:
@@ -5613,7 +5693,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(check_ascii, return_dtype=pl.Boolean))
 
-    def isdecimal(self) -> "Series":
+    def isdecimal(self) -> Series:
         """Check if all characters are decimal."""
 
         def check_decimal(s: Any) -> Any:
@@ -5623,7 +5703,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(check_decimal, return_dtype=pl.Boolean))
 
-    def isdigit(self) -> "Series":
+    def isdigit(self) -> Series:
         """Check if all characters are digits."""
 
         def check_digit(s: Any) -> Any:
@@ -5633,7 +5713,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(check_digit, return_dtype=pl.Boolean))
 
-    def islower(self) -> "Series":
+    def islower(self) -> Series:
         """Check if all characters are lowercase."""
 
         def check_lower(s: Any) -> Any:
@@ -5643,7 +5723,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(check_lower, return_dtype=pl.Boolean))
 
-    def isnumeric(self) -> "Series":
+    def isnumeric(self) -> Series:
         """Check if all characters are numeric."""
 
         def check_numeric(s: Any) -> Any:
@@ -5653,7 +5733,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(check_numeric, return_dtype=pl.Boolean))
 
-    def isspace(self) -> "Series":
+    def isspace(self) -> Series:
         """Check if all characters are whitespace."""
 
         def check_space(s: Any) -> Any:
@@ -5663,7 +5743,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(check_space, return_dtype=pl.Boolean))
 
-    def istitle(self) -> "Series":
+    def istitle(self) -> Series:
         """Check if strings are in title case."""
 
         def check_title(s: Any) -> Any:
@@ -5673,7 +5753,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(check_title, return_dtype=pl.Boolean))
 
-    def isupper(self) -> "Series":
+    def isupper(self) -> Series:
         """Check if all characters are uppercase."""
 
         def check_upper(s: Any) -> Any:
@@ -5684,7 +5764,7 @@ class _StringAccessor:
         return Series(self._series.map_elements(check_upper, return_dtype=pl.Boolean))
 
     # String Finding/Indexing
-    def find(self, sub: str, start: int = 0, end: Any = None) -> "Series":
+    def find(self, sub: str, start: int = 0, end: Any = None) -> Series:
         """Find substring in each string, return -1 if not found."""
 
         def find_sub(s: Any) -> Any:
@@ -5697,7 +5777,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(find_sub, return_dtype=pl.Int64))
 
-    def rfind(self, sub: str, start: int = 0, end: Any = None) -> "Series":
+    def rfind(self, sub: str, start: int = 0, end: Any = None) -> Series:
         """Find substring from right, return -1 if not found."""
 
         def rfind_sub(s: Any) -> Any:
@@ -5710,7 +5790,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(rfind_sub, return_dtype=pl.Int64))
 
-    def index(self, sub: str, start: int = 0, end: Any = None) -> "Series":
+    def index(self, sub: str, start: int = 0, end: Any = None) -> Series:
         """Find substring, raise ValueError if not found."""
 
         def index_sub(s: Any) -> Any:
@@ -5724,7 +5804,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(index_sub, return_dtype=pl.Int64))
 
-    def rindex(self, sub: str, start: int = 0, end: Any = None) -> "Series":
+    def rindex(self, sub: str, start: int = 0, end: Any = None) -> Series:
         """Find substring from right, raise ValueError if not found."""
 
         def rindex_sub(s: Any) -> Any:
@@ -5738,7 +5818,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(rindex_sub, return_dtype=pl.Int64))
 
-    def get(self, i: int) -> "Series":
+    def get(self, i: int) -> Series:
         """Get character at position."""
 
         def get_char(s: Any) -> Any:
@@ -5752,7 +5832,7 @@ class _StringAccessor:
         return Series(self._series.map_elements(get_char, return_dtype=pl.Utf8))
 
     # String Splitting/Partitioning
-    def rsplit(self, pat: Any = None, n: int = -1) -> "Series":
+    def rsplit(self, pat: Any = None, n: int = -1) -> Series:
         """Split strings from the right."""
         if pat is None:
             pat = " "
@@ -5766,7 +5846,7 @@ class _StringAccessor:
             self._series.map_elements(rsplit_str, return_dtype=pl.List(pl.Utf8))
         )
 
-    def partition(self, sep: str = " ") -> "Series":
+    def partition(self, sep: str = " ") -> Series:
         """Partition strings at first occurrence of separator."""
 
         def partition_str(s: Any) -> Any:
@@ -5785,7 +5865,7 @@ class _StringAccessor:
             self._series.map_elements(partition_to_list, return_dtype=pl.List(pl.Utf8))
         )
 
-    def rpartition(self, sep: str = " ") -> "Series":
+    def rpartition(self, sep: str = " ") -> Series:
         """Partition strings at last occurrence of separator."""
 
         def rpartition_to_list(s: Any) -> Any:
@@ -5799,7 +5879,7 @@ class _StringAccessor:
         )
 
     # String Manipulation
-    def repeat(self, repeats: Any) -> "Series":
+    def repeat(self, repeats: Any) -> Series:
         """Repeat strings."""
         if isinstance(repeats, Series):
 
@@ -5825,7 +5905,7 @@ class _StringAccessor:
 
             return Series(self._series.map_elements(repeat_str, return_dtype=pl.Utf8))
 
-    def join(self, sep: str) -> "Series":
+    def join(self, sep: str) -> Series:
         """Join strings with separator."""
 
         def join_str(s: Any) -> Any:
@@ -5836,7 +5916,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(join_str, return_dtype=pl.Utf8))
 
-    def removeprefix(self, prefix: str) -> "Series":
+    def removeprefix(self, prefix: str) -> Series:
         """Remove prefix from strings."""
 
         def remove_prefix(s: Any) -> Any:
@@ -5846,7 +5926,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(remove_prefix, return_dtype=pl.Utf8))
 
-    def removesuffix(self, suffix: str) -> "Series":
+    def removesuffix(self, suffix: str) -> Series:
         """Remove suffix from strings."""
 
         def remove_suffix(s: Any) -> Any:
@@ -5858,7 +5938,7 @@ class _StringAccessor:
 
     def slice_replace(
         self, start: Any = None, stop: Any = None, repl: str = ""
-    ) -> "Series":
+    ) -> Series:
         """Replace slice of strings."""
 
         def slice_replace_str(s: Any) -> Any:
@@ -5877,7 +5957,7 @@ class _StringAccessor:
             self._series.map_elements(slice_replace_str, return_dtype=pl.Utf8)
         )
 
-    def pad(self, width: int, side: str = "left", fillchar: str = " ") -> "Series":
+    def pad(self, width: int, side: str = "left", fillchar: str = " ") -> Series:
         """Pad strings (deprecated, use center/ljust/rjust)."""
         if side == "left":
             return self.rjust(width, fillchar)
@@ -5887,7 +5967,7 @@ class _StringAccessor:
             return self.center(width, fillchar)
 
     # Regex Operations
-    def findall(self, pat: str, flags: int = 0) -> "Series":
+    def findall(self, pat: str, flags: int = 0) -> Series:
         """Find all matches of pattern."""
         import re
 
@@ -5903,7 +5983,7 @@ class _StringAccessor:
             self._series.map_elements(find_all, return_dtype=pl.List(pl.Utf8))
         )
 
-    def fullmatch(self, pat: str, flags: int = 0) -> "Series":
+    def fullmatch(self, pat: str, flags: int = 0) -> Series:
         """Check if full string matches pattern."""
         import re
 
@@ -5917,7 +5997,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(full_match, return_dtype=pl.Boolean))
 
-    def match(self, pat: str, flags: int = 0) -> "Series":
+    def match(self, pat: str, flags: int = 0) -> Series:
         """Check if string matches pattern at start."""
         import re
 
@@ -5931,7 +6011,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(match_str, return_dtype=pl.Boolean))
 
-    def extractall(self, pat: str, flags: int = 0) -> "DataFrame":
+    def extractall(self, pat: str, flags: int = 0) -> DataFrame:
         """Extract all matches of pattern (returns DataFrame)."""
         import re
 
@@ -5962,7 +6042,7 @@ class _StringAccessor:
         )
 
     # Encoding/Decoding
-    def encode(self, encoding: str = "utf-8", errors: str = "strict") -> "Series":
+    def encode(self, encoding: str = "utf-8", errors: str = "strict") -> Series:
         """Encode strings to bytes."""
 
         def encode_str(s: Any) -> Any:
@@ -5986,7 +6066,7 @@ class _StringAccessor:
             self._series.map_elements(encode_to_list, return_dtype=pl.List(pl.UInt8))
         )
 
-    def decode(self, encoding: str = "utf-8", errors: str = "strict") -> "Series":
+    def decode(self, encoding: str = "utf-8", errors: str = "strict") -> Series:
         """Decode bytes to strings."""
 
         # For Series of bytes (as list of ints), decode them
@@ -6007,7 +6087,7 @@ class _StringAccessor:
         sep: Any = None,
         na_rep: Any = None,
         join: str = "left",
-    ) -> "Series":
+    ) -> Series:
         """Concatenate strings."""
         raise NotImplementedError(
             "cat() is not yet fully implemented.\n"
@@ -6016,7 +6096,7 @@ class _StringAccessor:
             "  - Use + operator: series1 + sep + series2"
         )
 
-    def get_dummies(self, sep: str = "|") -> "DataFrame":
+    def get_dummies(self, sep: str = "|") -> DataFrame:
         """Get dummy variables from strings."""
         import polarpandas as ppd
 
@@ -6046,7 +6126,7 @@ class _StringAccessor:
             )
         return ppd.DataFrame(result_dict)
 
-    def normalize(self, form: str) -> "Series":
+    def normalize(self, form: str) -> Series:
         """Unicode normalization."""
         try:
             import unicodedata
@@ -6055,7 +6135,7 @@ class _StringAccessor:
                 if s is None:
                     return None
                 try:
-                    return unicodedata.normalize(form, s)
+                    return unicodedata.normalize(form, s)  # type: ignore[arg-type]
                 except Exception:
                     return s
 
@@ -6068,7 +6148,7 @@ class _StringAccessor:
                 "This should be available in Python standard library."
             ) from None
 
-    def translate(self, table: Dict[int, Any]) -> "Series":
+    def translate(self, table: Dict[int, Any]) -> Series:
         """Translate characters using translation table."""
 
         def translate_str(s: Any) -> Any:
@@ -6086,7 +6166,7 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(translate_str, return_dtype=pl.Utf8))
 
-    def wrap(self, width: int, **kwargs: Any) -> "Series":
+    def wrap(self, width: int, **kwargs: Any) -> Series:
         """Wrap text to specified width."""
         import textwrap
 
@@ -6108,7 +6188,7 @@ class _DatetimeAccessor:
         self._series = series._series
 
     @property
-    def year(self) -> "Series":
+    def year(self) -> Series:
         """Get year."""
         # Handle empty series
         if len(self._series) == 0:
@@ -6116,40 +6196,40 @@ class _DatetimeAccessor:
         return Series(self._series.dt.year())
 
     @property
-    def month(self) -> "Series":
+    def month(self) -> Series:
         """Get month."""
         return Series(self._series.dt.month())
 
     @property
-    def day(self) -> "Series":
+    def day(self) -> Series:
         """Get day."""
         return Series(self._series.dt.day())
 
     @property
-    def hour(self) -> "Series":
+    def hour(self) -> Series:
         """Get hour."""
         return Series(self._series.dt.hour())
 
     @property
-    def minute(self) -> "Series":
+    def minute(self) -> Series:
         """Get minute."""
         return Series(self._series.dt.minute())
 
     @property
-    def second(self) -> "Series":
+    def second(self) -> Series:
         """Get second."""
         return Series(self._series.dt.second())
 
     @property
-    def weekday(self) -> "Series":
+    def weekday(self) -> Series:
         """Get day of week."""
         return Series(self._series.dt.weekday())
 
-    def strftime(self, fmt: str) -> "Series":
+    def strftime(self, fmt: str) -> Series:
         """Format datetime as string."""
         return Series(self._series.dt.strftime(fmt))
 
-    def day_name(self, locale: Any = None) -> "Series":
+    def day_name(self, locale: Any = None) -> Series:
         """
         Return the day names of the datetime with specified locale.
 
@@ -6180,7 +6260,7 @@ class _DatetimeAccessor:
         )
         return Series(result)
 
-    def month_name(self, locale: Any = None) -> "Series":
+    def month_name(self, locale: Any = None) -> Series:
         """
         Return the month names of the datetime with specified locale.
 
@@ -6218,41 +6298,41 @@ class _DatetimeAccessor:
         return Series(result)
 
     @property
-    def date(self) -> "Series":
+    def date(self) -> Series:
         """Extract date part."""
         # Use Polars date extraction - dtype may differ from pandas
         return Series(self._series.dt.date())
 
     @property
-    def time(self) -> "Series":
+    def time(self) -> Series:
         """Extract time part."""
         return Series(self._series.dt.time())
 
     @property
-    def dayofweek(self) -> "Series":
+    def dayofweek(self) -> Series:
         """Get day of week (Monday=0, Sunday=6)."""
         # Polars weekday() returns different values than pandas dayofweek
         # Adjust to match pandas convention
-        weekday_series: pl.Series = self._series.dt.weekday() - 1  # type: ignore[assignment]
+        weekday_series: pl.Series = self._series.dt.weekday() - 1
         return Series(weekday_series.cast(pl.Int32))
 
     @property
-    def dayofyear(self) -> "Series":
+    def dayofyear(self) -> Series:
         """Get day of year."""
         return Series(self._series.dt.ordinal_day().cast(pl.Int32))
 
     @property
-    def quarter(self) -> "Series":
+    def quarter(self) -> Series:
         """Get quarter of year."""
         return Series(self._series.dt.quarter().cast(pl.Int32))
 
     @property
-    def is_month_start(self) -> "Series":
+    def is_month_start(self) -> Series:
         """Check if date is first day of month."""
         return Series(self._series.dt.day() == 1)
 
     @property
-    def is_month_end(self) -> "Series":
+    def is_month_end(self) -> Series:
         """Check if date is last day of month."""
         # Get next day and check if it's the 1st
         next_day = self._series + pl.duration(days=1)
@@ -6263,14 +6343,14 @@ class _DatetimeAccessor:
         return Series(result_df["result"])
 
     @property
-    def is_quarter_start(self) -> "Series":
+    def is_quarter_start(self) -> Series:
         """Check if date is first day of quarter."""
         month = self._series.dt.month()
         day = self._series.dt.day()
         return Series((month.is_in([1, 4, 7, 10])) & (day == 1))
 
     @property
-    def is_quarter_end(self) -> "Series":
+    def is_quarter_end(self) -> Series:
         """Check if date is last day of quarter."""
         next_day = self._series + pl.duration(days=1)
         next_month = next_day.dt.month()
@@ -6281,12 +6361,12 @@ class _DatetimeAccessor:
         return Series(result_df["result"])
 
     @property
-    def is_year_start(self) -> "Series":
+    def is_year_start(self) -> Series:
         """Check if date is first day of year."""
         return Series((self._series.dt.month() == 1) & (self._series.dt.day() == 1))
 
     @property
-    def is_year_end(self) -> "Series":
+    def is_year_end(self) -> Series:
         """Check if date is last day of year."""
         next_day = self._series + pl.duration(days=1)
         result_expr = (next_day.dt.month() == 1) & (next_day.dt.day() == 1)
@@ -6295,12 +6375,12 @@ class _DatetimeAccessor:
         result_df = df.select(result_expr.alias("result"))
         return Series(result_df["result"])
 
-    def floor(self, freq: str) -> "Series":
+    def floor(self, freq: str) -> Series:
         """Floor datetime to specified frequency."""
         parsed_freq = self._parse_freq_to_duration(freq)
         return Series(self._series.dt.truncate(parsed_freq))
 
-    def ceil(self, freq: str) -> "Series":
+    def ceil(self, freq: str) -> Series:
         """Ceil datetime to specified frequency."""
         # Polars doesn't have ceil, use floor + offset
         parsed_freq = self._parse_freq_to_duration(freq)
@@ -6317,7 +6397,7 @@ class _DatetimeAccessor:
         result_df = df.select(result_expr.alias("result"))
         return Series(result_df["result"])
 
-    def round(self, freq: str) -> "Series":
+    def round(self, freq: str) -> Series:
         """Round datetime to specified frequency."""
         parsed_freq = self._parse_freq_to_duration(freq)
         return Series(self._series.dt.round(parsed_freq))
@@ -6360,7 +6440,7 @@ class _DatetimeAccessor:
         }
         return freq_map.get(freq, {"days": 1})
 
-    def normalize(self) -> "Series":
+    def normalize(self) -> Series:
         """
         Normalize datetime to midnight (00:00:00).
 
@@ -6378,7 +6458,7 @@ class _DatetimeAccessor:
         # Normalize to midnight by truncating to day
         return Series(self._series.dt.truncate("1d"))
 
-    def to_pydatetime(self) -> "Series":
+    def to_pydatetime(self) -> Series:
         """
         Convert to Python datetime objects.
 
@@ -6414,7 +6494,7 @@ class _DatetimeAccessor:
 
         return Series(self._series.map_elements(to_py_dt, return_dtype=pl.Object))
 
-    def as_unit(self, unit: str) -> "Series":
+    def as_unit(self, unit: str) -> Series:
         """
         Convert datetime to specified time unit.
 
@@ -6460,13 +6540,13 @@ class _DatetimeAccessor:
             elif polars_unit == "ms":
                 return Series(self._series.dt.timestamp("ms"))
             elif polars_unit == "s":
-                return Series(self._series.dt.timestamp("s"))
+                return Series(self._series.dt.timestamp("s"))  # type: ignore[arg-type]
             else:
                 raise ValueError(f"Unsupported unit: {unit}")
         except Exception as e:
             raise ValueError(f"Error converting to unit {unit}: {e}") from e
 
-    def isocalendar(self) -> "DataFrame":
+    def isocalendar(self) -> DataFrame:
         """
         Return ISO calendar year, week, and day.
 

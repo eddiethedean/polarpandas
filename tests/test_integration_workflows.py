@@ -76,9 +76,7 @@ class TestGroupByAggregationWorkflow:
         df = ppd.DataFrame({"group": ["A", "A", "B", "B"], "value": [1, 2, 3, 4]})
 
         # Group and compute group statistics
-        grouped = df.groupby("group").agg(
-            [pl.col("value").mean().alias("group_mean")]
-        )
+        grouped = df.groupby("group").agg([pl.col("value").mean().alias("group_mean")])
 
         assert len(grouped) == 2
 
@@ -323,9 +321,7 @@ class TestAggregationFilteringWorkflow:
         )
 
         # Aggregate by category
-        agg_result = df.groupby("category").agg(
-            [pl.col("value").sum().alias("total")]
-        )
+        agg_result = df.groupby("category").agg([pl.col("value").sum().alias("total")])
 
         # Filter aggregated results
         high_totals = agg_result[agg_result["total"] > 20]

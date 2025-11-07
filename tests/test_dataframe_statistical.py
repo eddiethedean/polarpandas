@@ -30,7 +30,9 @@ class TestDataFrameStatistical:
 
     def test_nlargest_multiple_columns(self) -> None:
         """Test nlargest with multiple columns."""
-        expected = load_expected("test_dataframe_statistical", "test_nlargest_multiple_columns")
+        expected = load_expected(
+            "test_dataframe_statistical", "test_nlargest_multiple_columns"
+        )
         ppd_result = ppd.DataFrame(self.data).nlargest(3, ["A", "B"])
         assert_frame_equal(ppd_result, expected)
 
@@ -42,7 +44,9 @@ class TestDataFrameStatistical:
 
     def test_nsmallest_multiple_columns(self) -> None:
         """Test nsmallest with multiple columns."""
-        expected = load_expected("test_dataframe_statistical", "test_nsmallest_multiple_columns")
+        expected = load_expected(
+            "test_dataframe_statistical", "test_nsmallest_multiple_columns"
+        )
         ppd_result = ppd.DataFrame(self.data).nsmallest(3, ["A", "B"])
         assert_frame_equal(ppd_result, expected)
 
@@ -111,7 +115,9 @@ class TestDataFrameStatistical:
 
     def test_pct_change_periods(self) -> None:
         """Test percentage change with different periods."""
-        expected = load_expected("test_dataframe_statistical", "test_pct_change_periods")
+        expected = load_expected(
+            "test_dataframe_statistical", "test_pct_change_periods"
+        )
         ppd_result = ppd.DataFrame(self.data).pct_change(periods=2)
         assert_frame_equal(ppd_result, expected, rtol=1e-5)
 
@@ -149,7 +155,9 @@ class TestDataFrameStatistical:
         ppd_df = ppd.DataFrame(data_with_nulls)
 
         # Test correlation with nulls
-        expected = load_expected("test_dataframe_statistical", "test_statistical_with_nulls")
+        expected = load_expected(
+            "test_dataframe_statistical", "test_statistical_with_nulls"
+        )
         ppd_result = ppd_df.corr()
         assert_frame_equal(ppd_result, expected, rtol=1e-5)
 
@@ -167,7 +175,9 @@ class TestDataFrameStatistical:
         ppd_df = ppd.DataFrame(data_single)
 
         # Test nlargest with single row
-        expected = load_expected("test_dataframe_statistical", "test_statistical_single_row")
+        expected = load_expected(
+            "test_dataframe_statistical", "test_statistical_single_row"
+        )
         ppd_result = ppd_df.nlargest(1, "A")
         assert_frame_equal(ppd_result, expected)
 

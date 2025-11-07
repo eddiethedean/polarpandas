@@ -1281,7 +1281,10 @@ class DataFrame:
     def transform(
         self,
         func: Union[
-            Callable, str, List[Union[Callable, str]], Dict[str, Union[Callable, str]]
+            Callable[..., Any],
+            str,
+            List[Union[Callable[..., Any], str]],
+            Dict[str, Union[Callable[..., Any], str]],
         ],
         axis: Union[int, Literal["index", "columns"]] = 0,
         *args: Any,
@@ -1307,11 +1310,12 @@ class DataFrame:
             DataFrame with transformed values.
         """
         # For now, delegate to apply() - transform is similar but guarantees same shape
-        return self.apply(func, axis=axis, *args, **kwargs)  # noqa: B026
+        # Type ignore needed because apply can return Series or DataFrame and has different axis types
+        return self.apply(func, axis=axis, *args, **kwargs)  # type: ignore[return-value,misc,arg-type] # noqa: B026
 
     def pipe(
         self,
-        func: Callable,
+        func: Callable[..., Any],
         *args: Any,
         **kwargs: Any,
     ) -> Any:
@@ -1679,8 +1683,8 @@ class DataFrame:
         header: Union[bool, List[str]] = True,
         index: bool = True,
         na_rep: str = "NaN",
-        formatters: Optional[Dict[str, Callable]] = None,
-        float_format: Optional[Union[str, Callable]] = None,
+        formatters: Optional[Dict[str, Callable[..., Any]]] = None,
+        float_format: Optional[Union[str, Callable[..., Any]]] = None,
         sparsify: Optional[bool] = None,
         index_names: bool = True,
         justify: Optional[str] = None,
@@ -2016,7 +2020,7 @@ class DataFrame:
             if len(self._index) > 0 and isinstance(self._index[0], tuple):
                 # Create MultiIndex from tuples
                 if isinstance(self._index_name, tuple):
-                    names = list(self._index_name)
+                    names: Optional[List[Optional[str]]] = list(self._index_name)
                 else:
                     names = None
                 return MultiIndex.from_tuples(self._index, names=names)
@@ -2176,7 +2180,7 @@ class DataFrame:
         from .series import Series as PolarPandasSeries
 
         result_df = self._df.clone()
-        expressions = []
+        expressions: List[Union[pl.Series, pl.Expr]] = []
 
         # Process each assignment
         for col_name, value in kwargs.items():
@@ -2567,7 +2571,7 @@ class DataFrame:
             if is_multiindex:
                 # Extract level values
                 if isinstance(self._index_name, tuple):
-                    names = list(self._index_name)
+                    names: Optional[List[Optional[str]]] = list(self._index_name)
                 else:
                     names = None
                 mi = MultiIndex.from_tuples(self._index, names=names)
@@ -2592,7 +2596,7 @@ class DataFrame:
                 polars_gb = temp_df.group_by(level_columns, *args, **kwargs)
                 # Store level info for result processing
                 gb = _GroupBy(polars_gb, self)
-                gb._level_info = {
+                gb._level_info = {  # type: ignore[attr-defined]
                     "level_columns": level_columns,
                     "level_names": [
                         mi.names[mi.get_level_number(lev)]
@@ -2734,7 +2738,7 @@ class DataFrame:
         # Convert to LazyFrame for join operation
         if isinstance(other_polars, pl.DataFrame):
             other_lazy = other_polars.lazy()
-        elif isinstance(other_polars, pl.LazyFrame):
+        elif isinstance(other_polars, pl.LazyFrame):  # type: ignore[unreachable]
             other_lazy = other_polars
         else:
             # Handle other types (e.g., internal Polars types)
@@ -2742,15 +2746,15 @@ class DataFrame:
                 # Try to get the DataFrame and convert to LazyFrame
                 if hasattr(other_polars, "collect"):
                     # It's a LazyFrame that needs collecting first, then convert
-                    other_lazy = other_polars.collect().lazy()  # type: ignore[attr-defined]
+                    other_lazy = other_polars.collect().lazy()
                 elif hasattr(other_polars, "lazy"):
                     # It has a lazy() method, use it directly
-                    other_lazy = other_polars.lazy()  # type: ignore[attr-defined]
+                    other_lazy = other_polars.lazy()
                 else:
                     # Try to convert via Polars DataFrame constructor
                     try:
                         # Attempt to create DataFrame from the object
-                        other_lazy = pl.DataFrame(other_polars).lazy()  # type: ignore[arg-type]
+                        other_lazy = pl.DataFrame(other_polars).lazy()
                     except (TypeError, ValueError):
                         # Fallback: try to convert via pandas
                         try:
@@ -2758,15 +2762,15 @@ class DataFrame:
 
                             # Convert to pandas first, then to Polars
                             if hasattr(other_polars, "to_pandas"):
-                                pd_df = other_polars.to_pandas()  # type: ignore[attr-defined]
+                                pd_df = other_polars.to_pandas()
                             else:
                                 # Try to convert via to_dict if available
                                 if hasattr(other_polars, "to_dict"):
-                                    pd_df = pd.DataFrame(other_polars.to_dict())  # type: ignore[attr-defined]
+                                    pd_df = pd.DataFrame(other_polars.to_dict())
                                 else:
                                     # Last resort: try to iterate
                                     try:
-                                        pd_df = pd.DataFrame(list(other_polars))  # type: ignore[arg-type]
+                                        pd_df = pd.DataFrame(list(other_polars))
                                     except (TypeError, ValueError) as e:
                                         raise TypeError(
                                             f"Cannot convert {type(other_polars).__name__} to pandas DataFrame. "
@@ -2919,12 +2923,12 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select([pl.col(col).sum() for col in numeric_cols])
+                result_pl = self._df.select([pl.col(col).sum() for col in numeric_cols])
             else:
-                result = self._df.select([pl.col(col).sum() for col in self.columns])
+                result_pl = self._df.select([pl.col(col).sum() for col in self.columns])
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def mean(
         self,
@@ -3025,12 +3029,16 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select([pl.col(col).mean() for col in numeric_cols])
+                result_pl = self._df.select(
+                    [pl.col(col).mean() for col in numeric_cols]
+                )
             else:
-                result = self._df.select([pl.col(col).mean() for col in self.columns])
+                result_pl = self._df.select(
+                    [pl.col(col).mean() for col in self.columns]
+                )
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def min(
         self,
@@ -3133,12 +3141,12 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select([pl.col(col).min() for col in numeric_cols])
+                result_pl = self._df.select([pl.col(col).min() for col in numeric_cols])
             else:
-                result = self._df.select([pl.col(col).min() for col in self.columns])
+                result_pl = self._df.select([pl.col(col).min() for col in self.columns])
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def max(
         self,
@@ -3241,12 +3249,12 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select([pl.col(col).max() for col in numeric_cols])
+                result_pl = self._df.select([pl.col(col).max() for col in numeric_cols])
             else:
-                result = self._df.select([pl.col(col).max() for col in self.columns])
+                result_pl = self._df.select([pl.col(col).max() for col in self.columns])
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def std(
         self,
@@ -3357,16 +3365,16 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).std(ddof=ddof) for col in numeric_cols]
                 )
             else:
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).std(ddof=ddof) for col in self.columns]
                 )
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def var(
         self,
@@ -3474,16 +3482,16 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).var(ddof=ddof) for col in numeric_cols]
                 )
             else:
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).var(ddof=ddof) for col in self.columns]
                 )
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def count(
         self,
@@ -3579,12 +3587,16 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.UInt32))
-                result = self._df.select([pl.col(col).count() for col in numeric_cols])
+                result_pl = self._df.select(
+                    [pl.col(col).count() for col in numeric_cols]
+                )
             else:
-                result = self._df.select([pl.col(col).count() for col in self.columns])
+                result_pl = self._df.select(
+                    [pl.col(col).count() for col in self.columns]
+                )
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def median(
         self,
@@ -3686,12 +3698,16 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select([pl.col(col).median() for col in numeric_cols])
+                result_pl = self._df.select(
+                    [pl.col(col).median() for col in numeric_cols]
+                )
             else:
-                result = self._df.select([pl.col(col).median() for col in self.columns])
+                result_pl = self._df.select(
+                    [pl.col(col).median() for col in self.columns]
+                )
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def quantile(
         self,
@@ -3727,7 +3743,7 @@ class DataFrame:
         if isinstance(q, (int, float)):
             q = [q]
         elif not isinstance(q, list):
-            q = list(q)
+            q = list(q)  # type: ignore[unreachable]
 
         if axis is None or axis == 1 or axis == "columns":
             # Row-wise quantile (axis=1)
@@ -3753,11 +3769,11 @@ class DataFrame:
                     return Series(pl.Series([], dtype=pl.Float64))
                 # For row-wise, compute quantile across columns
                 result_series = self._df.select(
-                    pl.concat_list(numeric_cols).list.quantile(q[0])
+                    pl.concat_list(numeric_cols).list.quantile(q[0])  # type: ignore[attr-defined]
                 )["literal"]
             else:
                 result_series = self._df.select(
-                    pl.concat_list(self.columns).list.quantile(q[0])
+                    pl.concat_list(self.columns).list.quantile(q[0])  # type: ignore[attr-defined]
                 )["literal"]
             index = (
                 self._index
@@ -3772,14 +3788,14 @@ class DataFrame:
                 for quantile_val in q:
                     if numeric_only:
                         quantile_series = self._df.select(
-                            pl.concat_list(numeric_cols).list.quantile(quantile_val)
+                            pl.concat_list(numeric_cols).list.quantile(quantile_val)  # type: ignore[attr-defined]
                         )["literal"]
                     else:
                         quantile_series = self._df.select(
-                            pl.concat_list(self.columns).list.quantile(quantile_val)
+                            pl.concat_list(self.columns).list.quantile(quantile_val)  # type: ignore[attr-defined]
                         )["literal"]
                     result_data[quantile_val] = quantile_series.to_list()
-                return DataFrame(result_data, index=index)
+                return DataFrame(result_data, index=index)  # type: ignore[arg-type]
         else:
             # Column-wise quantile (axis=0, default)
             if numeric_only:
@@ -3808,11 +3824,11 @@ class DataFrame:
 
             if len(q) == 1:
                 # Single quantile - return Series
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).quantile(q[0]) for col in cols_to_use]
                 )
-                values = [result[col][0] for col in result.columns]
-                return Series(values, index=result.columns)
+                values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+                return Series(values, index=result_pl.columns)
             else:
                 # Multiple quantiles - return DataFrame
                 result_data = {}
@@ -3823,7 +3839,7 @@ class DataFrame:
                     result_data[quantile_val] = [
                         quantile_result[col][0] for col in quantile_result.columns
                     ]
-                return DataFrame(result_data, index=cols_to_use)
+                return DataFrame(result_data, index=cols_to_use)  # type: ignore[arg-type]
 
     def nunique(
         self,
@@ -3864,10 +3880,12 @@ class DataFrame:
             return Series(result_series, index=index)
         else:
             # Column-wise nunique (axis=0, default) - count unique values down columns
-            result = self._df.select([pl.col(col).n_unique() for col in self.columns])
+            result_pl = self._df.select(
+                [pl.col(col).n_unique() for col in self.columns]
+            )
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def value_counts(
         self,
@@ -3989,11 +4007,11 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result_series = self._df.select(pl.product_horizontal(numeric_cols))[
+                result_series = self._df.select(pl.product_horizontal(numeric_cols))[  # type: ignore[attr-defined]
                     "literal"
                 ]
             else:
-                result_series = self._df.select(pl.product_horizontal(self.columns))[
+                result_series = self._df.select(pl.product_horizontal(self.columns))[  # type: ignore[attr-defined]
                     "literal"
                 ]
             index = (
@@ -4024,16 +4042,16 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).product() for col in numeric_cols]
                 )
             else:
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).product() for col in self.columns]
                 )
             # Convert to Series with column names as index
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def product(
         self,
@@ -4080,7 +4098,7 @@ class DataFrame:
             return DataFrame()
         else:
             # Column-wise mode (axis=0, default)
-            result_data = {}
+            result_data: Dict[str, List[Any]] = {}
             cols_to_use = self.columns
             if numeric_only:
                 cols_to_use = [
@@ -4274,7 +4292,7 @@ class DataFrame:
             elif other is None:
                 expr = pl.when(cond_df[col]).then(pl.col(col)).otherwise(None)
             else:
-                expr = pl.when(cond_df[col]).then(pl.col(col)).otherwise(other)
+                expr = pl.when(cond_df[col]).then(pl.col(col)).otherwise(other)  # type: ignore[arg-type]
             expressions.append(expr.alias(col))
 
         result_df = self._df.select(expressions)
@@ -4287,7 +4305,9 @@ class DataFrame:
 
     def agg(
         self,
-        func: Union[str, List[str], Dict[str, Union[str, List[str]]], Callable],
+        func: Union[
+            str, List[str], Dict[str, Union[str, List[str]]], Callable[..., Any]
+        ],
         axis: Union[int, Literal["index", "columns"]] = 0,
         *args: Any,
         **kwargs: Any,
@@ -4327,14 +4347,16 @@ class DataFrame:
                 "nunique": self.nunique,
             }
             if func in agg_methods:
-                return agg_methods[func](axis=axis, **kwargs)
+                return agg_methods[func](axis=axis, **kwargs)  # type: ignore[no-any-return,operator]
 
         # For other cases, delegate to apply()
-        return self.apply(func, axis=axis, *args, **kwargs)  # noqa: B026
+        return self.apply(func, axis=axis, *args, **kwargs)  # type: ignore[arg-type,misc] # noqa: B026
 
     def aggregate(
         self,
-        func: Union[str, List[str], Dict[str, Union[str, List[str]]], Callable],
+        func: Union[
+            str, List[str], Dict[str, Union[str, List[str]]], Callable[..., Any]
+        ],
         axis: Union[int, Literal["index", "columns"]] = 0,
         *args: Any,
         **kwargs: Any,
@@ -4344,7 +4366,7 @@ class DataFrame:
 
         Alias for agg().
         """
-        return self.agg(func, axis=axis, *args, **kwargs)  # noqa: B026
+        return self.agg(func, axis=axis, *args, **kwargs)  # type: ignore[misc] # noqa: B026
 
     def mask(
         self,
@@ -4398,7 +4420,7 @@ class DataFrame:
             elif other is None:
                 expr = pl.when(cond_df[col]).then(None).otherwise(pl.col(col))
             else:
-                expr = pl.when(cond_df[col]).then(other).otherwise(pl.col(col))
+                expr = pl.when(cond_df[col]).then(other).otherwise(pl.col(col))  # type: ignore[arg-type]
             expressions.append(expr.alias(col))
 
         result_df = self._df.select(expressions)
@@ -4497,7 +4519,7 @@ class DataFrame:
                     diff_data[f"{col}_other"] = other_col
                 else:
                     # Show differences stacked
-                    diff_data[col] = pl.when(diff_mask).then(self_col).otherwise(None)
+                    diff_data[col] = pl.when(diff_mask).then(self_col).otherwise(None)  # type: ignore[assignment]
 
         if not diff_data:
             return DataFrame(pl.DataFrame())
@@ -4615,10 +4637,10 @@ class DataFrame:
                 ]
                 if not bool_cols:
                     return Series(pl.Series([], dtype=pl.Boolean))
-                result = self._df.select([pl.col(col).all() for col in bool_cols])
+                result_pl = self._df.select([pl.col(col).all() for col in bool_cols])
             else:
                 # For non-boolean columns, convert to boolean (non-zero/non-null = True)
-                result = self._df.select(
+                result_pl = self._df.select(
                     [
                         pl.col(col).cast(pl.Boolean).all()
                         if self._df[col].dtype != pl.Boolean
@@ -4626,8 +4648,8 @@ class DataFrame:
                         for col in self.columns
                     ]
                 )
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def any(
         self,
@@ -4684,10 +4706,10 @@ class DataFrame:
                 ]
                 if not bool_cols:
                     return Series(pl.Series([], dtype=pl.Boolean))
-                result = self._df.select([pl.col(col).any() for col in bool_cols])
+                result_pl = self._df.select([pl.col(col).any() for col in bool_cols])
             else:
                 # For non-boolean columns, convert to boolean (non-zero/non-null = True)
-                result = self._df.select(
+                result_pl = self._df.select(
                     [
                         pl.col(col).cast(pl.Boolean).any()
                         if self._df[col].dtype != pl.Boolean
@@ -4695,8 +4717,8 @@ class DataFrame:
                         for col in self.columns
                     ]
                 )
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def eq(
         self,
@@ -5724,11 +5746,11 @@ class DataFrame:
                     return Series(pl.Series([], dtype=pl.Float64))
                 # Use concat_list to compute row-wise skew
                 result_series = self._df.select(
-                    pl.concat_list(numeric_cols).list.skew()
+                    pl.concat_list(numeric_cols).list.skew()  # type: ignore[attr-defined]
                 )["literal"]
             else:
                 result_series = self._df.select(
-                    pl.concat_list(self.columns).list.skew()
+                    pl.concat_list(self.columns).list.skew()  # type: ignore[attr-defined]
                 )["literal"]
             index = (
                 self._index
@@ -5746,11 +5768,15 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select([pl.col(col).skew() for col in numeric_cols])
+                result_pl = self._df.select(
+                    [pl.col(col).skew() for col in numeric_cols]
+                )
             else:
-                result = self._df.select([pl.col(col).skew() for col in self.columns])
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+                result_pl = self._df.select(
+                    [pl.col(col).skew() for col in self.columns]
+                )
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def kurtosis(
         self,
@@ -5791,11 +5817,11 @@ class DataFrame:
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
                 result_series = self._df.select(
-                    pl.concat_list(numeric_cols).list.kurtosis()
+                    pl.concat_list(numeric_cols).list.kurtosis()  # type: ignore[attr-defined]
                 )["literal"]
             else:
                 result_series = self._df.select(
-                    pl.concat_list(self.columns).list.kurtosis()
+                    pl.concat_list(self.columns).list.kurtosis()  # type: ignore[attr-defined]
                 )["literal"]
             index = (
                 self._index
@@ -5813,15 +5839,15 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).kurtosis() for col in numeric_cols]
                 )
             else:
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).kurtosis() for col in self.columns]
                 )
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def sem(
         self,
@@ -5890,21 +5916,21 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Float64))
-                result = self._df.select(
+                result_pl = self._df.select(
                     [
                         pl.col(col).std(ddof=ddof) / pl.col(col).count().sqrt()
                         for col in numeric_cols
                     ]
                 )
             else:
-                result = self._df.select(
+                result_pl = self._df.select(
                     [
                         pl.col(col).std(ddof=ddof) / pl.col(col).count().sqrt()
                         for col in self.columns
                     ]
                 )
-            values = [result[col][0] for col in result.columns]
-            return Series(values, index=result.columns)
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
+            return Series(values, index=result_pl.columns)
 
     def idxmax(
         self,
@@ -5990,22 +6016,22 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Int64))
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).arg_max() for col in numeric_cols]
                 )
             else:
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).arg_max() for col in self.columns]
                 )
-            values = [result[col][0] for col in result.columns]
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
             # Use index if available
             if self._index is not None:
                 indexed_values = [
                     self._index[v] if v < len(self._index) else v for v in values
                 ]
-                return Series(indexed_values, index=result.columns)
+                return Series(indexed_values, index=result_pl.columns)
             else:
-                return Series(values, index=result.columns)
+                return Series(values, index=result_pl.columns)
 
     def idxmin(
         self,
@@ -6091,22 +6117,22 @@ class DataFrame:
                 ]
                 if not numeric_cols:
                     return Series(pl.Series([], dtype=pl.Int64))
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).arg_min() for col in numeric_cols]
                 )
             else:
-                result = self._df.select(
+                result_pl = self._df.select(
                     [pl.col(col).arg_min() for col in self.columns]
                 )
-            values = [result[col][0] for col in result.columns]
+            values = [result_pl[col].to_list()[0] for col in result_pl.columns]
             # Use index if available
             if self._index is not None:
                 indexed_values = [
                     self._index[v] if v < len(self._index) else v for v in values
                 ]
-                return Series(indexed_values, index=result.columns)
+                return Series(indexed_values, index=result_pl.columns)
             else:
-                return Series(values, index=result.columns)
+                return Series(values, index=result_pl.columns)
 
     def explode(
         self,
@@ -6282,9 +6308,9 @@ class DataFrame:
                 result["_index"] = self._index
             return result
         elif orient == "list":
-            return [self._df[col].to_list() for col in self.columns]
+            return [self._df[col].to_list() for col in self.columns]  # type: ignore[return-value]
         elif orient == "records":
-            return [dict(zip(self.columns, row)) for row in self._df.iter_rows()]
+            return [dict(zip(self.columns, row)) for row in self._df.iter_rows()]  # type: ignore[return-value]
         elif orient == "split":
             return {
                 "columns": self.columns,
@@ -6991,17 +7017,17 @@ class DataFrame:
             if isinstance(self._index[0], tuple):
                 # Create MultiIndex and drop level
                 if isinstance(self._index_name, tuple):
-                    names = list(self._index_name)
+                    names_list: Optional[List[Optional[str]]] = list(self._index_name)
                 else:
-                    names = None
-                mi = MultiIndex.from_tuples(self._index, names=names)
+                    names_list = None
+                mi = MultiIndex.from_tuples(self._index, names=names_list)
                 new_mi = mi.droplevel(level)
 
                 # Convert back to list format
                 if isinstance(new_mi, MultiIndex):
                     result = self.copy()
                     result._index = new_mi.tolist()
-                    result._index_name = new_mi.names if new_mi.names else None
+                    result._index_name = new_mi.names if new_mi.names else None  # type: ignore[assignment]  # type: ignore[assignment]
                     return result
                 else:
                     # Converted to Index - preserve the name
@@ -7113,15 +7139,15 @@ class DataFrame:
             if isinstance(self._index[0], tuple):
                 # Create MultiIndex and reorder
                 if isinstance(self._index_name, tuple):
-                    names = list(self._index_name)
+                    names_list: Optional[List[Optional[str]]] = list(self._index_name)
                 else:
-                    names = None
-                mi = MultiIndex.from_tuples(self._index, names=names)
-                new_mi = mi.reorder_levels(order)
+                    names_list = None
+                mi = MultiIndex.from_tuples(self._index, names=names_list)
+                new_mi = mi.reorder_levels(order)  # type: ignore[arg-type]
 
                 result = self.copy()
                 result._index = new_mi.tolist()
-                result._index_name = new_mi.names if new_mi.names else None
+                result._index_name = new_mi.names if new_mi.names else None  # type: ignore[assignment]
                 return result
             else:
                 # Regular Index - can't reorder
@@ -7159,15 +7185,15 @@ class DataFrame:
             if isinstance(self._index[0], tuple):
                 # Create MultiIndex and swap
                 if isinstance(self._index_name, tuple):
-                    names = list(self._index_name)
+                    names_list: Optional[List[Optional[str]]] = list(self._index_name)
                 else:
-                    names = None
-                mi = MultiIndex.from_tuples(self._index, names=names)
+                    names_list = None
+                mi = MultiIndex.from_tuples(self._index, names=names_list)
                 new_mi = mi.swaplevel(i, j)
 
                 result = self.copy()
                 result._index = new_mi.tolist()
-                result._index_name = new_mi.names if new_mi.names else None
+                result._index_name = new_mi.names if new_mi.names else None  # type: ignore[assignment]
                 return result
             else:
                 # Regular Index - can't swap
@@ -7290,7 +7316,7 @@ class DataFrame:
             if key in self.columns:
                 from .series import Series
 
-                return Series(self._df[key])
+                return Series(self._df[key])  # type: ignore[return-value]
             else:
                 raise KeyError(f"Key {key} not found in columns")
 
@@ -7324,7 +7350,11 @@ class DataFrame:
             Kurtosis values
         """
         return self.kurtosis(
-            axis=axis, skipna=skipna, level=level, numeric_only=numeric_only, **kwargs
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only or False,
+            **kwargs,
         )
 
     def map(
@@ -7516,9 +7546,9 @@ class DataFrame:
         # Use Polars transpose with column names from index if available
         if has_multiindex:
             # Convert MultiIndex tuples to strings for Polars column names
-            column_names = [str(t) for t in self._index]
+            column_names = [str(t) for t in self._index]  # type: ignore[union-attr]
         else:
-            column_names = self._index if self._index else None
+            column_names = self._index if self._index else None  # type: ignore[assignment]
 
         try:
             transposed = self._df.transpose(
@@ -7530,13 +7560,13 @@ class DataFrame:
             # We need to restore it when converting to pandas
             if has_multiindex:
                 # Store the MultiIndex column information
-                result._column_index = self._index
-                result._column_index_name = self._index_name
+                result._column_index = self._index  # type: ignore[attr-defined]
+                result._column_index_name = self._index_name  # type: ignore[attr-defined]
                 # Columns are already set to MultiIndex tuple strings by Polars
             else:
                 # Rename columns to match pandas (0, 1, 2, ...) if no index
                 if column_names is None:
-                    num_cols = len(transposed.columns)
+                    num_cols = len(transposed.columns)  # type: ignore[unreachable]
                     new_columns = [str(i) for i in range(num_cols)]
                     result._df = result._df.rename(
                         dict(zip(result._df.columns, new_columns))
@@ -7696,7 +7726,9 @@ class DataFrame:
                 # For MultiIndex, flatten it into separate columns like pandas does
                 # Use reset_index() to convert MultiIndex to columns
                 df_with_index = self.reset_index(drop=False)
-                df_to_write = df_with_index._df
+                df_to_write = (
+                    df_with_index._df if df_with_index is not None else self._df
+                )
             else:
                 # Regular index - add as a single column
                 df_to_write = self._df.clone()
@@ -7884,7 +7916,7 @@ class DataFrame:
         rows = self._df.iter_rows(named=True)
         for i, row in enumerate(rows):
             # Convert row dict to Series
-            row_series = Series(pl.Series(list(row.values()), name=None))
+            row_series = Series(pl.Series(list(row.values())))
 
             # Get index
             if self._index is not None and i < len(self._index):
@@ -7934,7 +7966,7 @@ class DataFrame:
                 sanitized = "_" + sanitized
             sanitized_names.append(sanitized)
 
-        TupleClass = namedtuple(name, sanitized_names)
+        TupleClass = namedtuple(name or "Pandas", sanitized_names)  # type: ignore[misc]
 
         for i, row in enumerate(rows):
             # Get index
@@ -8110,11 +8142,11 @@ class DataFrame:
                 if exclude is not None:
                     for col in exclude:
                         if col in result.columns:
-                            result = result.drop(columns=[col])
+                            result = result.drop(columns=[col])  # type: ignore[assignment]
 
                 # Handle columns
                 if columns is not None:
-                    result = result[columns]
+                    result = result[columns]  # type: ignore[assignment]
 
                 return result
 
@@ -8230,24 +8262,137 @@ class DataFrame:
 
         self._df = result_df
 
-    def to_sql(self, name: str, con: Any, **kwargs: Any) -> None:
+    def to_sql(
+        self,
+        name: str,
+        con: Any,
+        schema: Optional[str] = None,
+        if_exists: str = "fail",
+        index: bool = True,
+        index_label: Optional[Union[str, List[str]]] = None,
+        chunksize: Optional[int] = None,
+        dtype: Optional[Dict[str, Any]] = None,
+        method: Optional[Union[str, Callable[..., Any]]] = None,
+        primary_key: Optional[Union[str, List[str]]] = None,
+        auto_increment: bool = False,
+    ) -> None:
         """
         Write DataFrame to SQL database.
+
+        This method provides pandas-compatible interface for writing DataFrames to SQL.
+        When primary_key or auto_increment parameters are used, SQLAlchemy is required.
+        Otherwise, uses Polars' native write_database() for better performance.
 
         Parameters
         ----------
         name : str
-            Table name
-        con : connection object
-            Database connection
-        **kwargs
-            Additional arguments passed to Polars write_database()
+            Name of SQL table
+        con : sqlalchemy.engine.Engine or sqlite3.Connection
+            Database connection or SQLAlchemy engine
+        schema : str, optional
+            Specify the schema (if database flavor supports this). If None, use
+            default schema.
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists:
+            - fail: Raise a ValueError
+            - replace: Drop the table before inserting new values
+            - append: Insert new values to the existing table
+        index : bool, default True
+            Write DataFrame index as a column. Uses index_label as the column
+            name in the table.
+        index_label : str or list of str, optional
+            Column label for index column(s). If None is given (default) and
+            index is True, then the index names are used.
+        chunksize : int, optional
+            Specify the number of rows in each batch to be written at a time.
+            By default, all rows will be written at once.
+        dtype : dict, optional
+            Specifying the datatype for columns. The keys should be the column
+            names and the values should be SQLAlchemy types.
+        method : {None, 'multi', callable}, optional
+            Controls the SQL insertion clause used:
+            - None: Uses standard SQL INSERT clause (one per row)
+            - 'multi': Pass multiple values in a single INSERT clause
+            - callable: Callable with signature (pd_table, conn, keys, data_iter)
+        primary_key : str or list of str, optional
+            Column name(s) to set as the primary key. Requires SQLAlchemy.
+        auto_increment : bool, default False
+            If True, the primary key column will be set to auto-increment.
+            Requires SQLAlchemy and primary_key to be specified.
+
+        Raises
+        ------
+        ValueError
+            If table exists and if_exists is 'fail'
+        ImportError
+            If SQLAlchemy is required but not installed
 
         Examples
         --------
-        >>> df.to_sql("table", connection)
+        Create a simple table:
+
+        >>> from sqlalchemy import create_engine
+        >>> engine = create_engine('sqlite:///example.db')
+        >>> df = ppd.DataFrame({'id': [1, 2, 3], 'name': ['Alice', 'Bob', 'Charlie']})
+        >>> df.to_sql('users', engine)
+
+        Create a table with a primary key:
+
+        >>> df.to_sql('users', engine, if_exists='replace', primary_key='id')
+
+        Create a table with an auto-incrementing primary key:
+
+        >>> df.to_sql('users', engine, if_exists='replace',
+        ...           primary_key='id', auto_increment=True)
+
+        Create a table with a composite primary key:
+
+        >>> df.to_sql('users', engine, primary_key=['id', 'email'])
+
+        Notes
+        -----
+        - When primary_key or auto_increment is specified, SQLAlchemy is required
+        - For best performance without these features, the method uses Polars'
+          native write_database()
+        - The index parameter and index_label are not fully supported yet when
+          using Polars' native write_database()
         """
-        self._df.write_database(name, con, **kwargs)
+        # Check if we need SQLAlchemy features
+        needs_sqlalchemy = primary_key is not None or auto_increment
+
+        if needs_sqlalchemy:
+            # Use SQLAlchemy for advanced features
+            from polarpandas._sql_utils import create_table_with_primary_key
+
+            if auto_increment and primary_key is None:
+                raise ValueError("auto_increment requires primary_key to be specified")
+
+            create_table_with_primary_key(
+                df=self._df,
+                table_name=name,
+                connection=con,
+                schema=schema,
+                if_exists=if_exists,
+                primary_key=primary_key,
+                auto_increment=auto_increment,
+                dtype=dtype,
+                index=index,
+                index_label=index_label,
+            )
+        else:
+            # Use Polars' native write_database for better performance
+            # Map pandas if_exists to Polars if_exists
+            if if_exists not in ("fail", "replace", "append"):
+                raise ValueError(
+                    f"'{if_exists}' is not valid for if_exists. "
+                    "Valid options are 'fail', 'replace', 'append'."
+                )
+
+            self._df.write_database(
+                table_name=name,
+                connection=con,
+                if_table_exists=if_exists,  # type: ignore[arg-type]
+            )
 
     def to_feather(self, path: str, **kwargs: Any) -> None:
         """
@@ -8807,14 +8952,14 @@ class DataFrame:
                 col: [float("nan")] * len(numeric_cols) for col in numeric_cols
             }
             result_data = {"index": numeric_cols}
-            result_data.update(corr_data)
+            result_data.update(corr_data)  # type: ignore[arg-type]
             result_df = pl.DataFrame(result_data)
             result = DataFrame(result_df)
-            result = result.set_index("index")
-            if result is None:
+            result_indexed = result.set_index("index")
+            if result_indexed is None:
                 raise RuntimeError("set_index returned None unexpectedly")
-            result._index_name = None
-            return result
+            result_indexed._index_name = None
+            return result_indexed
 
         if len(numeric_cols) == 1:
             # Single column: return DataFrame with 1.0 (self-correlation)
@@ -8824,13 +8969,13 @@ class DataFrame:
 
         # Calculate pairwise correlations using Polars expressions
         # corr(X, Y) = cov(X, Y) / (std(X) * std(Y))
-        corr_data: Dict[str, List[float]] = {}
+        corr_result_data: Dict[str, List[float]] = {}
         for col1 in numeric_cols:
-            corr_data[col1] = []
+            corr_result_data[col1] = []
             for col2 in numeric_cols:
                 if col1 == col2:
                     # Self-correlation is always 1.0
-                    corr_data[col1].append(1.0)
+                    corr_result_data[col1].append(1.0)
                 else:
                     # Calculate correlation: cov(X,Y) / (std(X) * std(Y))
                     # Use Polars expressions to compute this efficiently
@@ -8843,7 +8988,7 @@ class DataFrame:
 
                     # Handle edge case: need at least 2 observations for correlation
                     if n < 2:
-                        corr_data[col1].append(float("nan"))
+                        corr_result_data[col1].append(float("nan"))
                     else:
                         stats = df_subset.select(
                             [
@@ -8872,7 +9017,7 @@ class DataFrame:
                             or std2 == 0.0
                             or cov_val is None
                         ):
-                            corr_data[col1].append(float("nan"))
+                            corr_result_data[col1].append(float("nan"))
                         else:
                             # Correlation = cov / (std1 * std2)
                             corr_value = (
@@ -8880,23 +9025,23 @@ class DataFrame:
                                 if (std1 * std2) != 0.0
                                 else float("nan")
                             )
-                            corr_data[col1].append(corr_value)
+                            corr_result_data[col1].append(corr_value)
 
         # Create correlation matrix DataFrame
         # Add index column as first column
         result_data = {"index": numeric_cols}
-        result_data.update(corr_data)
+        result_data.update(corr_result_data)  # type: ignore[arg-type]
         result_df = pl.DataFrame(result_data)
 
         # Create polarpandas DataFrame and set index
         result = DataFrame(result_df)
-        result = result.set_index("index")
-        if result is None:
+        result_corr = result.set_index("index")
+        if result_corr is None:
             raise RuntimeError("set_index returned None unexpectedly")
         # Remove index name to match pandas behavior (pandas corr/cov have unnamed index)
-        result._index_name = None
+        result_corr._index_name = None
 
-        return result
+        return result_corr
 
     def cov(self, min_periods: Optional[int] = None) -> "DataFrame":
         """
@@ -8941,7 +9086,7 @@ class DataFrame:
                     # Self-covariance is variance (use sample variance to match pandas)
                     var_value = self._df[col1].var(ddof=1)
                     cov_data[col1].append(
-                        var_value if var_value is not None else float("nan")
+                        var_value if var_value is not None else float("nan")  # type: ignore[arg-type]
                     )
                 else:
                     # Calculate covariance: E[(X - μX)(Y - μY)]
@@ -8973,18 +9118,18 @@ class DataFrame:
         # Create covariance matrix DataFrame
         # Add index column as first column
         result_data = {"index": numeric_cols}
-        result_data.update(cov_data)
+        result_data.update(cov_data)  # type: ignore[arg-type]
         result_df = pl.DataFrame(result_data)
 
         # Create polarpandas DataFrame and set index
         result = DataFrame(result_df)
-        result = result.set_index("index")
-        if result is None:
+        result_cov = result.set_index("index")
+        if result_cov is None:
             raise RuntimeError("set_index returned None unexpectedly")
         # Remove index name to match pandas behavior (pandas corr/cov have unnamed index)
-        result._index_name = None
+        result_cov._index_name = None
 
-        return result
+        return result_cov
 
     def rank(
         self,
@@ -10411,19 +10556,19 @@ class DataFrame:
         """
         # Try tabulate first (lightweight), otherwise use string formatting
         try:
-            from tabulate import tabulate
+            from tabulate import tabulate  # type: ignore[import-untyped]  # noqa: F811
 
             # Select columns if specified
             df_to_show = self
             if columns:
-                df_to_show = self[columns]
+                df_to_show = self[columns]  # type: ignore[assignment]
 
             # Limit rows/cols if specified
             if max_rows is not None:
                 df_to_show = df_to_show.head(max_rows)
             if max_cols is not None:
                 cols = df_to_show.columns[:max_cols]
-                df_to_show = df_to_show[cols]
+                df_to_show = df_to_show[cols]  # type: ignore[assignment]
 
             # Convert to list of lists
             data = df_to_show._df.to_dict(as_series=False)
@@ -10457,7 +10602,7 @@ class DataFrame:
             )
 
             if buf is None:
-                return html_str
+                return html_str  # type: ignore[no-any-return]
             else:
                 if hasattr(buf, "write"):
                     buf.write(html_str)
@@ -10617,12 +10762,12 @@ class DataFrame:
         """
         # Try tabulate first (lightweight), otherwise use string formatting
         try:
-            from tabulate import tabulate
+            from tabulate import tabulate  # noqa: F811
 
             # Select columns if specified
             df_to_show = self
             if columns:
-                df_to_show = self[columns]
+                df_to_show = self[columns]  # type: ignore[assignment]
 
             # Convert to list of lists
             data = df_to_show._df.to_dict(as_series=False)
@@ -10656,7 +10801,7 @@ class DataFrame:
             )
 
             if buf is None:
-                return latex_str
+                return latex_str  # type: ignore[no-any-return]
             else:
                 if hasattr(buf, "write"):
                     buf.write(latex_str)
@@ -10745,7 +10890,7 @@ class DataFrame:
         """
         # Try tabulate first (lightweight), otherwise use string formatting
         try:
-            from tabulate import tabulate
+            from tabulate import tabulate  # noqa: F811  # noqa: F811
 
             # Convert to list of lists
             data = self._df.to_dict(as_series=False)
@@ -10770,7 +10915,7 @@ class DataFrame:
             )
 
             if buf is None:
-                return md_str
+                return md_str  # type: ignore[no-any-return]
             else:
                 if hasattr(buf, "write"):
                     buf.write(md_str)
@@ -10830,7 +10975,7 @@ class DataFrame:
         >>> df = ppd.DataFrame({"A": [1, 2]})
         >>> df.to_orc("data.orc")
         """
-        self._df.write_orc(path, **kwargs)
+        self._df.write_orc(path, **kwargs)  # type: ignore[attr-defined]
 
     def to_pickle(
         self,
@@ -10872,11 +11017,11 @@ class DataFrame:
         elif compression:
             raise ValueError(f"Unsupported compression: {compression}")
         else:
-            opener = open
+            opener = open  # type: ignore[assignment]
             mode = "wb"
 
         with opener(path, mode) as f:
-            pickle.dump(self, f, protocol=protocol, **kwargs)
+            pickle.dump(self, f, protocol=protocol, **kwargs)  # type: ignore[arg-type]
 
     def to_records(
         self,
@@ -10925,7 +11070,7 @@ class DataFrame:
                 dtype = [(k, type(v).__name__) for k, v in data[0].items()]
                 # Convert to proper numpy dtypes
                 dtype = [
-                    (k, np.dtype("O") if v == "NoneType" else np.dtype(v))
+                    (k, np.dtype("O") if v == "NoneType" else np.dtype(v))  # type: ignore[misc]
                     for k, v in dtype
                 ]
                 arr = np.array([tuple(row.values()) for row in data], dtype=dtype)
@@ -11180,22 +11325,22 @@ class DataFrame:
                 encoding=encoding
             )
             if isinstance(xml_str, bytes):
-                xml_str = xml_str.decode(encoding)
+                xml_str = xml_str.decode(encoding)  # type: ignore[assignment]
         else:
             xml_str = tostring(root, encoding=encoding).decode(encoding)
 
         # Add XML declaration if needed
-        if xml_declaration and not xml_str.startswith("<?xml"):
-            xml_str = f'<?xml version="1.0" encoding="{encoding}"?>\n{xml_str}'
+        if xml_declaration and not xml_str.startswith("<?xml"):  # type: ignore[arg-type]
+            xml_str = f'<?xml version="1.0" encoding="{encoding}"?>\n{xml_str}'  # type: ignore[str-bytes-safe,assignment]
 
         if path_or_buffer is None:
-            return xml_str
+            return xml_str  # type: ignore[return-value]
         else:
             if hasattr(path_or_buffer, "write"):
                 path_or_buffer.write(xml_str)
             else:
                 with open(path_or_buffer, "w", encoding=encoding) as f:
-                    f.write(xml_str)
+                    f.write(xml_str)  # type: ignore[arg-type]
             return None
 
     def to_timestamp(
@@ -11246,7 +11391,7 @@ class DataFrame:
                 else:
                     # Try to parse as datetime
                     new_index = [
-                        pl.datetime.fromisoformat(str(idx))
+                        pl.datetime.fromisoformat(str(idx))  # type: ignore[attr-defined]
                         if isinstance(idx, str)
                         else idx
                         for idx in self._index
@@ -11305,7 +11450,7 @@ class DataFrame:
                         new_idx = idx.tz_convert(tz)
                     elif isinstance(idx, pl.Datetime):
                         # Use Polars timezone conversion
-                        new_idx = idx.replace_time_zone(str(tz))
+                        new_idx = idx.replace_time_zone(str(tz))  # type: ignore[attr-defined]
                     else:
                         new_idx = idx
                     new_index.append(new_idx)
@@ -11371,7 +11516,7 @@ class DataFrame:
                         )
                     elif isinstance(idx, pl.Datetime):
                         # Use Polars timezone localization
-                        new_idx = idx.replace_time_zone(str(tz))
+                        new_idx = idx.replace_time_zone(str(tz))  # type: ignore[attr-defined]
                     else:
                         new_idx = idx
                     new_index.append(new_idx)
@@ -11441,14 +11586,14 @@ class _LocIndexer:
                     row_key, col_key = key
                     return self._get_rows_cols(row_key, col_key)
                 # Check if the entire key is a MultiIndex row key (no slices, first element not a tuple)
-                elif is_multiindex and len(key) == len(self._df._index[0]):
+                elif is_multiindex and len(key) == len(self._df._index[0]):  # type: ignore[index]
                     # This is a MultiIndex row key, not (row, col)
                     return self._get_rows(key)
                 # Otherwise, it's (row, col) indexing
                 else:
                     row_key, col_key = key
                     return self._get_rows_cols(row_key, col_key)
-            elif is_multiindex and len(key) == len(self._df._index[0]):
+            elif is_multiindex and len(key) == len(self._df._index[0]):  # type: ignore[index]
                 # This is a MultiIndex row key, not (row, col)
                 return self._get_rows(key)
             else:
@@ -11510,7 +11655,7 @@ class _LocIndexer:
                             names = list(self._df._index_name)
                         else:
                             names = None
-                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)  # type: ignore[arg-type]
                         # For slices with MultiIndex, we need to handle differently
                         # For now, use simple index-based approach
                         start_idx = (
@@ -11547,7 +11692,7 @@ class _LocIndexer:
                             names = list(self._df._index_name)
                         else:
                             names = None
-                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)  # type: ignore[arg-type]
                         row_indices = []
                         for label in row_key:
                             loc_result = mi.get_loc(label)
@@ -11570,7 +11715,7 @@ class _LocIndexer:
                             names = list(self._df._index_name)
                         else:
                             names = None
-                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)  # type: ignore[arg-type]
                         # Handle tuple keys (including slice tuples like ('bar', slice(None)))
                         if isinstance(row_key, tuple):
                             # Tuple key - could be exact match or slice tuple
@@ -11588,7 +11733,7 @@ class _LocIndexer:
                                 else:
                                     drop_matched_level = False  # Full tuple match
                             else:
-                                row_indices = [loc_result]
+                                row_indices = [loc_result]  # type: ignore[list-item]
                                 drop_matched_level = False
                         else:
                             # Single scalar key - partial match
@@ -11601,7 +11746,7 @@ class _LocIndexer:
                                 # Partial key match - drop the matched level from result
                                 drop_matched_level = True
                             else:
-                                row_indices = [loc_result]
+                                row_indices = [loc_result]  # type: ignore[list-item]
                                 drop_matched_level = False
                     else:
                         # Regular index
@@ -11803,7 +11948,7 @@ class _LocIndexer:
                             names = list(self._df._index_name)
                         else:
                             names = None
-                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)  # type: ignore[arg-type]
                         row_indices = []
                         for label in row_key:
                             loc_result = mi.get_loc(label)
@@ -11823,14 +11968,14 @@ class _LocIndexer:
                             names = list(self._df._index_name)
                         else:
                             names = None
-                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)  # type: ignore[arg-type]
                         loc_result = mi.get_loc(row_key)
                         if isinstance(loc_result, int):
                             row_indices = [loc_result]
                         elif isinstance(loc_result, list):
                             row_indices = loc_result
                         else:
-                            row_indices = [loc_result]
+                            row_indices = [loc_result]  # type: ignore[list-item]
                     else:
                         # Regular index
                         row_indices = [self._df._index.index(row_key)]
@@ -11909,7 +12054,7 @@ class _LocIndexer:
                     from polarpandas.series import Series
 
                     try:
-                        row_data = polars_df.row(row_key, named=True)
+                        row_data = polars_df.row(row_key, named=True)  # type: ignore[assignment]
                         if isinstance(col_key, list):
                             return Series([row_data[k] for k in col_key])
                         else:
@@ -13393,7 +13538,7 @@ class _GroupBy:
             for col in level_names:
                 if col in result_df.columns:
                     level_values_list.append(result_df[col].tolist())
-                    result_df = result_df.drop(columns=[col])
+                    result_df = result_df.drop(columns=[col])  # type: ignore[assignment]
 
             # Create MultiIndex from level values if multiple levels, or regular Index if single
             if len(level_values_list) > 1:
@@ -13412,7 +13557,7 @@ class _GroupBy:
                 sorted_level_values = [v for _, v in sorted_pairs]
 
                 # Reorder DataFrame rows to match sorted index
-                result_df = result_df.iloc[sorted_indices]
+                result_df = result_df.iloc[sorted_indices]  # type: ignore[assignment]
                 result_df._index = sorted_level_values
                 result_df._index_name = level_names[0] if level_names else None
 

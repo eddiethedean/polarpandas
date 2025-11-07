@@ -142,7 +142,7 @@ from .utils import (
 )
 
 # Version
-__version__ = "0.5.0"
+__version__ = "0.8.0"
 
 # Main exports
 __all__ = [

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polarpandas"
-version = "0.7.0"
+version = "0.8.0"
 description = "A pandas-compatible API layer built on top of Polars for high-performance data manipulation"
 readme = "README.md"
 license = {text = "MIT"}
@@ -83,6 +83,9 @@ clipboard = [
 formatting = [
     "tabulate>=0.9.0",  # For table formatting (to_latex, to_markdown, to_html)
 ]
+sqlalchemy = [
+    "sqlalchemy>=1.4.0",  # For enhanced SQL operations (primary_key, auto_increment in to_sql)
+]
 docs = [
     "sphinx>=5.0.0",
     "sphinx-rtd-theme>=1.0.0",
@@ -101,6 +104,7 @@ all = [
     "xarray>=2022.0.0",
     "pyperclip>=1.8.0",
     "tabulate>=0.9.0",
+    "sqlalchemy>=1.4.0",
 ]
 
 [project.urls]

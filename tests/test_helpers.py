@@ -78,8 +78,8 @@ def assert_frame_equal(
     result_dict = ppd_df.to_dict()
 
     # Remove _index column if it exists (internal column)
-    if '_index' in result_dict:
-        del result_dict['_index']
+    if "_index" in result_dict:
+        del result_dict["_index"]
 
     # Handle list of dicts format (row-oriented)
     if isinstance(expected, list):
@@ -155,9 +155,7 @@ def assert_series_equal(
 
     if len(result) != len(expected):
         raise AssertionError(
-            f"Series length mismatch.\n"
-            f"Expected: {len(expected)}\n"
-            f"Got: {len(result)}"
+            f"Series length mismatch.\nExpected: {len(expected)}\nGot: {len(result)}"
         )
 
     if check_order:
@@ -193,13 +191,13 @@ def assert_index_equal(
 
     if len(result) != len(expected):
         raise AssertionError(
-            f"Index length mismatch.\n"
-            f"Expected: {len(expected)}\n"
-            f"Got: {len(result)}"
+            f"Index length mismatch.\nExpected: {len(expected)}\nGot: {len(result)}"
         )
 
     if check_order:
-        assert result == expected, f"Index values don't match.\nExpected: {expected}\nGot: {result}"
+        assert result == expected, (
+            f"Index values don't match.\nExpected: {expected}\nGot: {result}"
+        )
     else:
         assert sorted(result, key=_sort_key) == sorted(expected, key=_sort_key), (
             f"Index values don't match (order ignored).\n"
@@ -237,9 +235,7 @@ def _assert_values_equal(
             continue
         if res_val is None or exp_val is None:
             raise AssertionError(
-                f"{label}[{i}] mismatch.\n"
-                f"Expected: {exp_val}\n"
-                f"Got: {res_val}"
+                f"{label}[{i}] mismatch.\nExpected: {exp_val}\nGot: {res_val}"
             )
 
         # Handle floating point with tolerance
@@ -255,9 +251,7 @@ def _assert_values_equal(
             # Exact comparison for non-floats
             if res_val != exp_val:
                 raise AssertionError(
-                    f"{label}[{i}] mismatch.\n"
-                    f"Expected: {exp_val}\n"
-                    f"Got: {res_val}"
+                    f"{label}[{i}] mismatch.\nExpected: {exp_val}\nGot: {res_val}"
                 )
 
 
@@ -320,4 +314,3 @@ def assert_dict_equal(result: Dict[str, Any], expected: Dict[str, Any]) -> None:
                 f"Expected: {expected[key]}\n"
                 f"Got: {result[key]}"
             )
-

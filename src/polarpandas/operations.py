@@ -21,7 +21,7 @@ Examples
 >>> result = ppd.concat([df1, df2])
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from . import utils
 from .frame import DataFrame
@@ -417,8 +417,8 @@ def qcut(
     result_series = Series(result)
 
     if retbins:
-        # Calculate bins (simplified)
-        bins = pl_series.quantile([i / q for i in range(q + 1)]).to_list()
+        # Calculate bins - quantile() expects a single float, so compute each individually
+        bins = [pl_series.quantile(i / q) for i in range(q + 1)]
         return result_series, bins
     return result_series
 
@@ -630,7 +630,7 @@ def from_dummies(
     import polars as pl
 
     # Group columns by prefix
-    prefixes = {}
+    prefixes: Dict[str, List[str]] = {}
     for col in data.columns:
         if sep in col:
             prefix = col.split(sep)[0]
@@ -638,7 +638,7 @@ def from_dummies(
                 prefixes[prefix] = []
             prefixes[prefix].append(col)
 
-    result_cols = {}
+    result_cols: Dict[str, List[Any]] = {}
     for prefix, cols in prefixes.items():
         # Find the column with value 1 for each row
         result_cols[prefix] = []
@@ -684,8 +684,10 @@ def lreshape(
     >>> df = ppd.DataFrame({"A1": [1, 2], "A2": [3, 4], "B1": [5, 6]})
     >>> result = ppd.lreshape(df, {"A": ["A1", "A2"], "B": ["B1"]})
     """
+    from typing import cast
+
     # Use melt for each group
-    result_dfs = []
+    result_dfs: List[DataFrame] = []
     for new_col, old_cols in groups.items():
         id_vars = [col for col in data.columns if col not in old_cols]
         melted = data.melt(
@@ -697,7 +699,8 @@ def lreshape(
         if id_vars:
             result_dfs.append(melted)
         else:
-            result_dfs.append(melted[[new_col]])
+            # Column selection returns DataFrame
+            result_dfs.append(cast("DataFrame", melted[[new_col]]))
 
     # Combine results
     if result_dfs:
@@ -769,12 +772,16 @@ def merge_asof(
     left_key = on or left_on or "time"
     right_key = on or right_on or "time"
 
-    # Use Polars join_asof
+    # Use Polars join_asof - strategy needs to be a specific literal
+    from typing import Literal, cast
+
+    valid_strategy = cast("Literal['backward', 'forward', 'nearest']", direction)
+
     result = left._df.join_asof(
         right._df,
         left_on=left_key,
         right_on=right_key,
-        strategy=direction,
+        strategy=valid_strategy,
         tolerance=tolerance,
         **kwargs,
     )
@@ -833,16 +840,19 @@ def merge_ordered(
     >>> result = ppd.merge_ordered(left, right, on="key")
     """
     # Sort both DataFrames by join key
+    from typing import cast
+
     join_key = on or left_on or right_on
     if join_key:
-        left_sorted = left.sort_values(join_key)
-        right_sorted = right.sort_values(join_key)
+        # sort_values with inplace=False returns DataFrame
+        left_sorted = cast("DataFrame", left.sort_values(join_key))
+        right_sorted = cast("DataFrame", right.sort_values(join_key))
         # Perform outer join
         result = left_sorted.merge(
             right_sorted, on=join_key, how="outer", suffixes=suffixes, **kwargs
         )
         # Sort result
-        return result.sort_values(join_key)
+        return cast("DataFrame", result.sort_values(join_key))
     else:
         # Fallback to regular merge
         return left.merge(
@@ -1160,7 +1170,7 @@ def option_context(*args: Any, **kwargs: Any) -> Any:
     from contextlib import contextmanager
 
     @contextmanager
-    def _option_context():
+    def _option_context() -> Iterator[None]:
         # Store old values
         old_values = {}
         for key, value in kwargs.items():
@@ -1349,7 +1359,8 @@ def infer_freq(index: Any, **kwargs: Any) -> Optional[str]:
             pd_index = pd.Index(index._index)
         else:
             pd_index = pd.Index(index)
-        return pd.infer_freq(pd_index, **kwargs)
+        freq_result: Optional[str] = pd.infer_freq(pd_index, **kwargs)
+        return freq_result
     except ImportError:
         # Fallback: try to detect pattern
         if hasattr(index, "__len__") and len(index) > 1:

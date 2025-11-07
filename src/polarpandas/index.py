@@ -315,20 +315,22 @@ class Index:
         sort: bool = True,
         ascending: bool = False,
         **kwargs: Any,
-    ) -> "Index":
+    ) -> "Series":
         """Return a Series containing counts of unique values."""
         from polarpandas.series import Series
 
-        result = self._series.value_counts(sort=sort)
+        result_df = self._series.value_counts(sort=sort)
         if sort:
             if ascending:
-                result = result.sort("count")
+                result_df = result_df.sort("count")
             else:
-                result = result.sort("count", descending=True)
+                result_df = result_df.sort("count", descending=True)
         if normalize:
             total = len(self._series)
-            result = result.with_columns([pl.col("count") / total])
-        return Series(result)  # type: ignore[arg-type]
+            result_df = result_df.with_columns([pl.col("count") / total])
+        # value_counts returns a DataFrame, extract count column as Series
+        count_series = result_df.select("count").to_series()
+        return Series(count_series)
 
     # Data Manipulation
     def append(self, other: Union["Index", List[Any], pl.Series]) -> "Index":
@@ -445,16 +447,18 @@ class Index:
             result = self._series.map_elements(arg, return_dtype=pl.Object)
         elif isinstance(arg, Index):
             # Map using another Index (positional mapping)
+            # Polars map_elements doesn't support index parameter, so use enumeration
             arg_list = arg._series.to_list()
+            self_list = self._series.to_list()
 
-            def map_func(x: Any, idx: int) -> Any:
+            mapped_values = []
+            for idx, val in enumerate(self_list):
                 if idx < len(arg_list):
-                    return arg_list[idx]
-                return x
+                    mapped_values.append(arg_list[idx])
+                else:
+                    mapped_values.append(val)
 
-            result = self._series.map_elements(
-                lambda x, idx: map_func(x, idx), return_dtype=pl.Object
-            )
+            result = pl.Series(mapped_values)
         else:
             raise TypeError(
                 f"map() arg must be dict, callable, or Index, got {type(arg)}"
@@ -913,7 +917,7 @@ class Index:
         return self
 
     # Type Conversion/Export
-    def to_frame(self, name: Optional[str] = None) -> "DataFrame":  # type: ignore[name-defined]
+    def to_frame(self, name: Optional[str] = None) -> "DataFrame":
         """Convert to DataFrame."""
         from polarpandas.frame import DataFrame
 
@@ -943,7 +947,7 @@ class Index:
 
     def to_series(
         self, index: Optional[Any] = None, name: Optional[str] = None
-    ) -> "Series":  # type: ignore[name-defined]
+    ) -> "Series":
         """Convert to Series."""
         from polarpandas.series import Series
 
@@ -1148,7 +1152,7 @@ class Index:
         return_indexer: bool = False,
         ascending: bool = True,
         na_position: str = "last",
-        key: Optional[Callable] = None,
+        key: Optional[Callable[..., Any]] = None,
         **kwargs: Any,
     ) -> Union["Index", Tuple["Index", "Index"]]:
         """Sort by values."""
@@ -1235,7 +1239,7 @@ class MultiIndex(Index):
         self,
         levels: Optional[List[List[Any]]] = None,
         codes: Optional[List[List[int]]] = None,
-        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+        names: Optional[Union[List[Optional[str]], Tuple[Optional[str], ...]]] = None,
         sortorder: Optional[int] = None,
         verify_integrity: bool = True,
         **kwargs: Any,
@@ -1263,7 +1267,7 @@ class MultiIndex(Index):
 
             self._levels = [list(level) for level in levels]
             self._codes = [list(code) for code in codes]
-            self._names = (
+            self._names: Tuple[Optional[str], ...] = (
                 tuple(names) if names is not None else tuple(None for _ in levels)
             )
             self._sortorder = sortorder
@@ -1408,7 +1412,7 @@ class MultiIndex(Index):
     def from_arrays(
         cls,
         arrays: List[List[Any]],
-        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+        names: Optional[Union[List[Optional[str]], Tuple[Optional[str], ...]]] = None,
         sortorder: Optional[int] = None,
     ) -> "MultiIndex":
         """
@@ -1447,7 +1451,7 @@ class MultiIndex(Index):
 
         for arr in arrays:
             # Get unique values in order of first appearance
-            unique_values = []
+            unique_values: List[Any] = []
             value_to_code: Dict[Any, int] = {}
             level_codes = []
 
@@ -1469,7 +1473,7 @@ class MultiIndex(Index):
     def from_tuples(
         cls,
         tuples: List[Tuple[Any, ...]],
-        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+        names: Optional[Union[List[Optional[str]], Tuple[Optional[str], ...]]] = None,
         sortorder: Optional[int] = None,
     ) -> "MultiIndex":
         """
@@ -1511,7 +1515,7 @@ class MultiIndex(Index):
     def from_product(
         cls,
         iterables: List[List[Any]],
-        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+        names: Optional[Union[List[Optional[str]], Tuple[Optional[str], ...]]] = None,
         sortorder: Optional[int] = None,
     ) -> "MultiIndex":
         """
@@ -1551,7 +1555,7 @@ class MultiIndex(Index):
     def from_frame(
         cls,
         df: "DataFrame",
-        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+        names: Optional[Union[List[Optional[str]], Tuple[Optional[str], ...]]] = None,
     ) -> "MultiIndex":
         """
         Create a MultiIndex from a DataFrame.

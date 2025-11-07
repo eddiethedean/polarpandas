@@ -145,6 +145,8 @@ def bdate_range(
     """
     # Simplified implementation - business days exclude weekends
     # For a full implementation, would need to handle holidays
+    from datetime import datetime, timedelta
+
     import polars as pl
 
     from .series import Series
@@ -152,25 +154,29 @@ def bdate_range(
     if start and periods:
         # Generate business days from start
         dates = []
-        current = pl.date(start)
+        current = (
+            datetime.fromisoformat(str(start)) if isinstance(start, str) else start
+        )
         count = 0
         while count < periods:
             # Check if weekday (0=Monday, 6=Sunday)
             if current.weekday() < 5:  # Monday-Friday
-                dates.append(current)
+                dates.append(current.date())
                 count += 1
-            current = current + pl.duration(days=1)
-        return Series(dates)
+            current = current + timedelta(days=1)
+        return Series(pl.Series(dates))
     elif start and end:
         # Generate business days between start and end
         dates = []
-        current = pl.date(start)
-        end_date = pl.date(end)
+        current = (
+            datetime.fromisoformat(str(start)) if isinstance(start, str) else start
+        )
+        end_date = datetime.fromisoformat(str(end)) if isinstance(end, str) else end
         while current <= end_date:
             if current.weekday() < 5:  # Monday-Friday
-                dates.append(current)
-            current = current + pl.duration(days=1)
-        return Series(dates)
+                dates.append(current.date())
+            current = current + timedelta(days=1)
+        return Series(pl.Series(dates))
     else:
         raise ValueError("Must specify either (start and end) or (start and periods)")
 

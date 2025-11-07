@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2025-11-07
+
+### Added
+- **Enhanced SQL support** - Advanced `to_sql()` method with primary keys and auto-increment
+- **Primary key support** - Single and composite primary key specification in SQL table creation
+- **Auto-increment columns** - Automatic ID generation for primary key columns
+- **SQL utilities module** - New `_sql_utils.py` with SQLAlchemy integration for advanced features
+- **Type mapping** - Automatic Polars to SQL type conversion (Int8→SmallInteger, Float64→Float, etc.)
+- **Connection flexibility** - Support for connection strings, SQLAlchemy engines, and connection objects
+- **Comprehensive SQL tests** - 33 new tests covering edge cases, data types, and batch operations
+
+### Changed
+- **Test suite expanded** - 1,026 tests passing (up from 993)
+- **SQL coverage** - 88% code coverage for SQL utilities
+- **Optional SQLAlchemy dependency** - Enhanced SQL features require `pip install polarpandas[sqlalchemy]`
+
+### Fixed
+- **SQLAlchemy integration** - Proper error handling when SQLAlchemy not installed
+- **SQL data type handling** - Correct mapping for all numeric, string, date, and boolean types
+- **Composite key validation** - Proper error messages for invalid composite key + auto-increment combinations
+
 ## [0.7.0] - 2025-11-07
 
 ### Added

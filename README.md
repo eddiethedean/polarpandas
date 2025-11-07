@@ -2,7 +2,7 @@
 
 > **The fastest pandas-compatible API you'll ever use**
 
-[![Tests](https://img.shields.io/badge/tests-993%20passing-brightgreen?style=flat)](https://github.com/eddiethedean/polarpandas)
+[![Tests](https://img.shields.io/badge/tests-1026%20passing-brightgreen?style=flat)](https://github.com/eddiethedean/polarpandas)
 [![Coverage](https://img.shields.io/badge/coverage-48%25-yellow?style=flat)](https://github.com/eddiethedean/polarpandas)
 [![Type Safety](https://img.shields.io/badge/ty-checked-brightgreen?style=flat)](https://docs.astral.sh/ty/)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue?style=flat)](https://python.org)
@@ -63,6 +63,33 @@ shape: (3, 6)
 └─────────┴─────┴─────────┴─────────────┴────────────┴────────────┘
 ```
 
+## 🎯 What's New in v0.8.0
+
+### 🗄️ **Enhanced SQL Support**
+- ✅ **Primary key support** - Create SQL tables with single or composite primary keys
+- ✅ **Auto-increment columns** - Automatic ID generation for primary keys
+- ✅ **Advanced `to_sql()` method** - Enhanced DataFrame.to_sql() and Series.to_sql() with:
+  - Primary key specification (`primary_key` parameter)
+  - Auto-increment support (`auto_increment` parameter)
+  - Full if_exists options ('fail', 'replace', 'append')
+  - Connection string and SQLAlchemy engine support
+- ✅ **Type mapping** - Automatic Polars to SQL type conversion
+- ✅ **Comprehensive SQL utilities** - New `_sql_utils.py` module with SQLAlchemy integration
+
+### 🧪 **Expanded Test Coverage**
+- ✅ **1,026 tests passing** - Added 33 comprehensive SQL tests
+- ✅ **88% coverage for SQL utilities** - Extensive testing of SQL functionality
+- ✅ **Edge case testing** - Empty DataFrames, nulls, Unicode, large datasets (10K+ rows)
+- ✅ **Data type testing** - Integer, float, boolean, date, datetime, and string types
+- ✅ **Batch operations** - Multiple table operations and transaction testing
+
+### 📦 **New Features**
+- ✅ **Optional SQLAlchemy dependency** - Install with `pip install polarpandas[sqlalchemy]`
+- ✅ **Graceful fallback** - Informative error messages when SQLAlchemy not installed
+- ✅ **Connection flexibility** - Support for connection strings, engines, and connection objects
+
+---
+
 ## 🎯 What's New in v0.7.0
 
 ### 🧪 **Improved Test Suite**
@@ -107,7 +134,8 @@ shape: (3, 6)
 
 ### 📊 **Enhanced I/O Support**
 - ✅ **Comprehensive file format support** - CSV, JSON, Parquet, Excel, HDF5, HTML, XML, Stata, SPSS, SAS, and more
-- ✅ **Optional dependencies** - Organized into feature groups (excel, hdf5, html, spss, sas, xarray, clipboard, formatting)
+- ✅ **Enhanced SQL support** - Full pandas-compatible `to_sql()` with primary key and auto-increment support
+- ✅ **Optional dependencies** - Organized into feature groups (excel, hdf5, html, spss, sas, xarray, clipboard, formatting, sqlalchemy)
 - ✅ **Flexible installation** - Install only what you need: `pip install polarpandas[excel]` or `pip install polarpandas[all]`
 
 ### 🚀 **Features (from v0.2.0)**
@@ -131,11 +159,23 @@ pip install -e .
 
 # Or install directly (when published)
 pip install polarpandas
+
+# Install with optional features
+pip install polarpandas[sqlalchemy]  # For enhanced SQL features (primary keys, auto-increment)
+pip install polarpandas[excel]       # For Excel file support
+pip install polarpandas[all]         # Install all optional dependencies
 ```
 
 **Requirements:** Python 3.8+ and Polars
 
-Optional: `numpy` (only if you want to pass NumPy dtype objects like `np.int64` in schemas)
+**Optional Dependencies:**
+- `numpy` - For passing NumPy dtype objects like `np.int64` in schemas
+- `sqlalchemy` - For enhanced SQL features (primary keys, auto-increment in `to_sql()`)
+- `pandas` - For certain conversion features and compatibility
+- `openpyxl`, `xlsxwriter` - For Excel file I/O
+- `lxml`, `html5lib` - For HTML/XML parsing
+- `pyreadstat`, `sas7bdat` - For SPSS/SAS file support
+- And more... see `pyproject.toml` for complete list
 
 ## 🔥 Core Features
 
@@ -206,6 +246,41 @@ df.groupby("category").agg(pl.col("value").mean())  # Use Polars expressions
 df.pivot_table(values="sales", index="region", columns="month")
 df.rolling(window=3).mean()
 ```
+
+### 🗄️ **Enhanced SQL Operations**
+PolarPandas now supports full pandas-compatible SQL operations with advanced features:
+
+```python
+from sqlalchemy import create_engine
+
+# Create database connection
+engine = create_engine('sqlite:///mydb.db')
+
+# Basic write (uses Polars' fast write_database)
+df = ppd.DataFrame({'id': [1, 2, 3], 'name': ['Alice', 'Bob', 'Charlie']})
+df.to_sql('users', engine, if_exists='replace')
+
+# Create table with primary key (requires SQLAlchemy)
+df.to_sql('users', engine, if_exists='replace', primary_key='id')
+
+# Create table with auto-incrementing primary key
+df.to_sql('users', engine, if_exists='replace', 
+          primary_key='id', auto_increment=True)
+
+# Composite primary key
+df.to_sql('users', engine, if_exists='replace', 
+          primary_key=['id', 'email'])
+
+# Read back from SQL
+result = ppd.read_sql("SELECT * FROM users WHERE id > 1", engine)
+```
+
+**Key Features:**
+- 🚀 **Fast by default** - Uses Polars' native `write_database()` when no special features needed
+- 🔑 **Primary key support** - Set single or composite primary keys (requires SQLAlchemy)
+- ⚡ **Auto-increment** - Enable auto-incrementing IDs (requires SQLAlchemy)
+- 🔄 **Smart fallback** - Automatically uses Polars for performance, SQLAlchemy for features
+- ✅ **Pandas-compatible** - Complete pandas `to_sql()` signature support
 
 ### 🧩 **Schema Conversion (pandas-style to Polars)**
 PolarPandas accepts schemas in multiple forms and converts them to Polars types automatically:

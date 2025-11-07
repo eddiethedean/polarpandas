@@ -412,7 +412,6 @@ class TestSeriesAggregation:
         result = s.agg("sum")
         assert result == 10
 
-
     def test_aggregate_alias(self):
         """Test aggregate as alias for agg."""
         s = ppd.Series([1, 2, 3])
@@ -695,8 +694,6 @@ class TestSeriesAnyAll:
 
         s2 = ppd.Series([True, False, True])
         assert s2.all() is False
-
-
 
 
 class TestSeriesFirstLastValidIndex:
