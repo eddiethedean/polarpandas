@@ -23,6 +23,7 @@ Examples
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from . import utils
 from .frame import DataFrame
 from .series import Series
 
@@ -330,6 +331,39 @@ def factorize(
             use_na_sentinel=use_na_sentinel,
             **kwargs,
         )
+
+
+def cut(x: Any, bins: Any, labels: Optional[List[str]] = None, **kwargs: Any) -> Any:
+    """
+    Bin values into discrete intervals.
+
+    Parameters
+    ----------
+    x : array-like, Series
+        Input data to be binned
+    bins : int or list
+        Number of bins (int) or explicit bin edges (list)
+    labels : list, optional
+        Labels for the resulting bins
+    **kwargs
+        Additional arguments
+
+    Returns
+    -------
+    Series
+        Series with bin labels or categories
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> s = ppd.Series([1, 2, 3, 4, 5])
+    >>> result = ppd.operations.cut(s, bins=3)
+    """
+    # If it's a Series, convert to list first
+    values = x.tolist() if isinstance(x, Series) else x
+
+    # Use the utils.cut function
+    return utils.cut(values, bins=bins, labels=labels, **kwargs)
 
 
 def qcut(

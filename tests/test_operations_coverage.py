@@ -199,22 +199,14 @@ class TestCutOperations:
     def test_cut_into_bins(self):
         """Test cut into bins."""
         s = ppd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-
-        try:
-            result = operations.cut(s, bins=3)
-            assert isinstance(result, ppd.Series)
-        except (NotImplementedError, AttributeError, Exception):
-            pytest.skip("cut not yet fully implemented")
+        result = operations.cut(s, bins=3)
+        assert isinstance(result, ppd.Series)
 
     def test_cut_with_labels(self):
         """Test cut with custom labels."""
         s = ppd.Series([1, 2, 3, 4, 5, 6])
-
-        try:
-            result = operations.cut(s, bins=3, labels=["low", "mid", "high"])
-            assert isinstance(result, ppd.Series)
-        except (NotImplementedError, AttributeError, Exception):
-            pytest.skip("cut with labels not yet fully implemented")
+        result = operations.cut(s, bins=3, labels=["low", "mid", "high"])
+        assert isinstance(result, ppd.Series)
 
 
 class TestQcutOperations:
@@ -501,12 +493,8 @@ class TestCutBins:
     def test_cut_explicit_bins(self):
         """Test cut with explicit bin edges."""
         s = ppd.Series([1, 2, 3, 4, 5])
-
-        try:
-            result = ppd.operations.cut(s, bins=[0, 2, 4, 6])
-            assert isinstance(result, ppd.Series)
-        except (NotImplementedError, AttributeError, Exception):
-            pytest.skip("cut with explicit bins not yet fully implemented")
+        result = ppd.operations.cut(s, bins=[0, 2, 4, 6])
+        assert isinstance(result, ppd.Series)
 
 
 class TestQcutDuplicates:

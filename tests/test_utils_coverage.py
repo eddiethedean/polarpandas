@@ -160,32 +160,20 @@ class TestCutFunction:
     def test_cut_basic(self):
         """Test basic cut operation."""
         data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-
-        try:
-            result = utils.cut(data, bins=3)
-            assert len(result) == len(data)
-        except (NotImplementedError, Exception):
-            pytest.skip("cut not yet fully implemented")
+        result = utils.cut(data, bins=3)
+        assert len(result) == len(data)
 
     def test_cut_with_labels(self):
         """Test cut with custom labels."""
         data = [1, 2, 3, 4, 5, 6]
-
-        try:
-            result = utils.cut(data, bins=3, labels=["low", "mid", "high"])
-            assert len(result) == len(data)
-        except (NotImplementedError, Exception):
-            pytest.skip("cut with labels not yet fully implemented")
+        result = utils.cut(data, bins=3, labels=["low", "mid", "high"])
+        assert len(result) == len(data)
 
     def test_cut_explicit_bins(self):
         """Test cut with explicit bin edges."""
         data = [1, 2, 3, 4, 5]
-
-        try:
-            result = utils.cut(data, bins=[0, 2, 4, 6])
-            assert len(result) == len(data)
-        except (NotImplementedError, Exception):
-            pytest.skip("cut with explicit bins not yet fully implemented")
+        result = utils.cut(data, bins=[0, 2, 4, 6])
+        assert len(result) == len(data)
 
 
 class TestSchemaConversionEdgeCases:
@@ -259,14 +247,13 @@ class TestSchemaConversionComplex:
 
     def test_convert_datetime_types(self):
         """Test converting datetime types."""
-        # 'date' is not supported yet
-        pytest.skip("date dtype not yet supported")
-        schema = {"A": "datetime64[ns]", "B": "date"}
+        schema = {"A": "datetime64[ns]"}
         result = utils.convert_schema_to_polars(schema)
 
-        # May or may not be implemented
+        # Datetime should be supported
         if result:
             assert isinstance(result, dict)
+            assert "A" in result
 
     def test_convert_categorical_type(self):
         """Test converting categorical type."""
@@ -327,19 +314,13 @@ class TestCutEdgeCases:
 
     def test_cut_single_value(self):
         """Test cut with single value."""
-        try:
-            result = utils.cut([5], bins=3)
-            assert len(result) == 1
-        except (NotImplementedError, ValueError, Exception):
-            pytest.skip("cut with single value not yet handled")
+        result = utils.cut([5], bins=3)
+        assert len(result) == 1
 
     def test_cut_empty_list(self):
         """Test cut with empty list."""
-        try:
-            result = utils.cut([], bins=3)
-            assert len(result) == 0
-        except (NotImplementedError, ValueError, Exception):
-            pytest.skip("cut with empty list not yet handled")
+        result = utils.cut([], bins=3)
+        assert len(result) == 0
 
 
 class TestUtilityHelpers:

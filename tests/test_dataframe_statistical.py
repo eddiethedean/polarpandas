@@ -1,189 +1,177 @@
 """
-Test statistical methods for DataFrame with pandas compatibility.
+Test statistical methods for DataFrame.
 
-All tests compare polarpandas output against actual pandas output
-to ensure 100% compatibility.
+All tests use pre-computed expected values that were generated using pandas.
+This allows testing without a pandas runtime dependency.
 """
 
-import pandas as pd
 import pytest
 
 import polarpandas as ppd
+from tests.test_helpers import assert_frame_equal, load_expected
 
 
 class TestDataFrameStatistical:
-    """Test statistical methods with pandas compatibility."""
+    """Test statistical methods."""
 
-    def setup_method(self):
-        """Create test data in both pandas and polarpandas."""
+    def setup_method(self) -> None:
+        """Create test data."""
         self.data = {
             "A": [1, 2, 3, 4, 5],
             "B": [10, 20, 30, 40, 50],
             "C": [1.1, 2.2, 3.3, 4.4, 5.5],
         }
-        # Don't create DataFrames here to avoid state pollution
-        # Each test method will create fresh DataFrames
 
-    def test_nlargest_basic(self):
+    def test_nlargest_basic(self) -> None:
         """Test nlargest method."""
-        pd_result = pd.DataFrame(self.data).nlargest(3, "A")
+        expected = load_expected("test_dataframe_statistical", "test_nlargest_basic")
         ppd_result = ppd.DataFrame(self.data).nlargest(3, "A")
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_nlargest_multiple_columns(self):
+    def test_nlargest_multiple_columns(self) -> None:
         """Test nlargest with multiple columns."""
-        pd_result = pd.DataFrame(self.data).nlargest(3, ["A", "B"])
+        expected = load_expected("test_dataframe_statistical", "test_nlargest_multiple_columns")
         ppd_result = ppd.DataFrame(self.data).nlargest(3, ["A", "B"])
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_nsmallest_basic(self):
+    def test_nsmallest_basic(self) -> None:
         """Test nsmallest method."""
-        pd_result = pd.DataFrame(self.data).nsmallest(3, "A")
+        expected = load_expected("test_dataframe_statistical", "test_nsmallest_basic")
         ppd_result = ppd.DataFrame(self.data).nsmallest(3, "A")
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_nsmallest_multiple_columns(self):
+    def test_nsmallest_multiple_columns(self) -> None:
         """Test nsmallest with multiple columns."""
-        pd_result = pd.DataFrame(self.data).nsmallest(3, ["A", "B"])
+        expected = load_expected("test_dataframe_statistical", "test_nsmallest_multiple_columns")
         ppd_result = ppd.DataFrame(self.data).nsmallest(3, ["A", "B"])
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_corr_basic(self):
+    def test_corr_basic(self) -> None:
         """Test correlation matrix."""
-        pd_result = pd.DataFrame(self.data).corr()
+        expected = load_expected("test_dataframe_statistical", "test_corr_basic")
         ppd_result = ppd.DataFrame(self.data).corr()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected, rtol=1e-5)
 
-    def test_corr_method(self):
+    def test_corr_method(self) -> None:
         """Test correlation with different method."""
         # Only test pearson (spearman not yet implemented)
-        import pytest
-
-        pd_result = pd.DataFrame(self.data).corr(method="pearson")
+        expected = load_expected("test_dataframe_statistical", "test_corr_method")
         ppd_result = ppd.DataFrame(self.data).corr(method="pearson")
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected, rtol=1e-5)
 
         # Test that spearman raises NotImplementedError
         with pytest.raises(NotImplementedError):
             ppd.DataFrame(self.data).corr(method="spearman")
 
-    def test_cov_basic(self):
+    def test_cov_basic(self) -> None:
         """Test covariance matrix."""
-        pd_result = pd.DataFrame(self.data).cov()
+        expected = load_expected("test_dataframe_statistical", "test_cov_basic")
         ppd_result = ppd.DataFrame(self.data).cov()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected, rtol=1e-5)
 
-    def test_rank_basic(self):
+    def test_rank_basic(self) -> None:
         """Test ranking."""
-        pd_result = pd.DataFrame(self.data).rank()
+        expected = load_expected("test_dataframe_statistical", "test_rank_basic")
         ppd_result = ppd.DataFrame(self.data).rank()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_rank_method(self):
+    def test_rank_method(self) -> None:
         """Test ranking with different method."""
-        pd_result = pd.DataFrame(self.data).rank(method="min")
+        expected = load_expected("test_dataframe_statistical", "test_rank_method")
         ppd_result = ppd.DataFrame(self.data).rank(method="min")
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_rank_numeric_only(self):
+    def test_rank_numeric_only(self) -> None:
         """Test ranking with numeric_only=True."""
         # Add a string column
         data_with_str = self.data.copy()
         data_with_str["D"] = ["a", "b", "c", "d", "e"]
 
-        pd_df = pd.DataFrame(data_with_str)
-        ppd_df = ppd.DataFrame(data_with_str)
+        expected = load_expected("test_dataframe_statistical", "test_rank_numeric_only")
+        ppd_result = ppd.DataFrame(data_with_str).rank(numeric_only=True)
+        assert_frame_equal(ppd_result, expected)
 
-        pd_result = pd_df.rank(numeric_only=True)
-        ppd_result = ppd_df.rank(numeric_only=True)
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_diff_basic(self):
+    def test_diff_basic(self) -> None:
         """Test difference calculation."""
-        pd_result = pd.DataFrame(self.data).diff()
+        expected = load_expected("test_dataframe_statistical", "test_diff_basic")
         ppd_result = ppd.DataFrame(self.data).diff()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_diff_periods(self):
+    def test_diff_periods(self) -> None:
         """Test difference with different periods."""
-        pd_result = pd.DataFrame(self.data).diff(periods=2)
+        expected = load_expected("test_dataframe_statistical", "test_diff_periods")
         ppd_result = ppd.DataFrame(self.data).diff(periods=2)
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_pct_change_basic(self):
+    def test_pct_change_basic(self) -> None:
         """Test percentage change."""
-        pd_result = pd.DataFrame(self.data).pct_change()
+        expected = load_expected("test_dataframe_statistical", "test_pct_change_basic")
         ppd_result = ppd.DataFrame(self.data).pct_change()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected, rtol=1e-5)
 
-    def test_pct_change_periods(self):
+    def test_pct_change_periods(self) -> None:
         """Test percentage change with different periods."""
-        pd_result = pd.DataFrame(self.data).pct_change(periods=2)
+        expected = load_expected("test_dataframe_statistical", "test_pct_change_periods")
         ppd_result = ppd.DataFrame(self.data).pct_change(periods=2)
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected, rtol=1e-5)
 
-    def test_cumsum_basic(self):
+    def test_cumsum_basic(self) -> None:
         """Test cumulative sum."""
-        pd_result = pd.DataFrame(self.data).cumsum()
+        expected = load_expected("test_dataframe_statistical", "test_cumsum_basic")
         ppd_result = ppd.DataFrame(self.data).cumsum()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_cumprod_basic(self):
+    def test_cumprod_basic(self) -> None:
         """Test cumulative product."""
-        pd_result = pd.DataFrame(self.data).cumprod()
+        expected = load_expected("test_dataframe_statistical", "test_cumprod_basic")
         ppd_result = ppd.DataFrame(self.data).cumprod()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_cummax_basic(self):
+    def test_cummax_basic(self) -> None:
         """Test cumulative maximum."""
-        pd_result = pd.DataFrame(self.data).cummax()
+        expected = load_expected("test_dataframe_statistical", "test_cummax_basic")
         ppd_result = ppd.DataFrame(self.data).cummax()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_cummin_basic(self):
+    def test_cummin_basic(self) -> None:
         """Test cumulative minimum."""
-        pd_result = pd.DataFrame(self.data).cummin()
+        expected = load_expected("test_dataframe_statistical", "test_cummin_basic")
         ppd_result = ppd.DataFrame(self.data).cummin()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_statistical_with_nulls(self):
+    def test_statistical_with_nulls(self) -> None:
         """Test statistical methods with null values."""
         data_with_nulls = {
             "A": [1, None, 3, 4, 5],
             "B": [10, 20, None, 40, 50],
             "C": [1.1, 2.2, 3.3, None, 5.5],
         }
-        pd_df = pd.DataFrame(data_with_nulls)
         ppd_df = ppd.DataFrame(data_with_nulls)
 
         # Test correlation with nulls
-        pd_result = pd_df.corr()
+        expected = load_expected("test_dataframe_statistical", "test_statistical_with_nulls")
         ppd_result = ppd_df.corr()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected, rtol=1e-5)
 
-    def test_statistical_empty_dataframe(self):
+    def test_statistical_empty_dataframe(self) -> None:
         """Test statistical methods with empty DataFrame."""
-        pd_empty = pd.DataFrame()
         ppd_empty = ppd.DataFrame()
 
         # These should raise appropriate errors
         with pytest.raises((ValueError, KeyError)):
-            pd_empty.nlargest(3, "A")
-        with pytest.raises((ValueError, KeyError)):
             ppd_empty.nlargest(3, "A")
 
-    def test_statistical_single_row(self):
+    def test_statistical_single_row(self) -> None:
         """Test statistical methods with single row."""
         data_single = {"A": [1], "B": [10], "C": [1.1]}
-        pd_df = pd.DataFrame(data_single)
         ppd_df = ppd.DataFrame(data_single)
 
         # Test nlargest with single row
-        pd_result = pd_df.nlargest(1, "A")
+        expected = load_expected("test_dataframe_statistical", "test_statistical_single_row")
         ppd_result = ppd_df.nlargest(1, "A")
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+        assert_frame_equal(ppd_result, expected)
 
-    def test_statistical_return_types(self):
+    def test_statistical_return_types(self) -> None:
         """Test that statistical methods return correct types."""
         result = ppd.DataFrame(self.data).nlargest(3, "A")
         assert isinstance(result, ppd.DataFrame)
@@ -194,19 +182,14 @@ class TestDataFrameStatistical:
         result = ppd.DataFrame(self.data).cumsum()
         assert isinstance(result, ppd.DataFrame)
 
-    def test_statistical_preserves_original(self):
+    def test_statistical_preserves_original(self) -> None:
         """Test that statistical methods don't modify original DataFrame."""
-        original_pd = pd.DataFrame(self.data).copy()
-        original_ppd = ppd.DataFrame(self.data).copy()
+        original_data = self.data.copy()
+        df = ppd.DataFrame(self.data)
 
         # Perform statistical operations
-        pd.DataFrame(self.data).nlargest(3, "A")
-        ppd.DataFrame(self.data).nlargest(3, "A")
-        pd.DataFrame(self.data).corr()
-        ppd.DataFrame(self.data).corr()
+        df.nlargest(3, "A")
+        df.corr()
 
-        # Original should be unchanged
-        pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
-        pd.testing.assert_frame_equal(
-            original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas()
-        )
+        # Original data should be unchanged
+        assert self.data == original_data

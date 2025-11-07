@@ -15,23 +15,12 @@ class TestUtilsFunctions:
         result = ppd.cut([], bins=3)
         assert result == []
 
-    def test_cut_with_labels_short_list(self):
-        """Test cut with labels when list is shorter than labels."""
-        # Line 101: labels[:len(x)] edge case
-        result = ppd.cut([1, 2], bins=3, labels=["A", "B", "C", "D", "E"])
-        assert len(result) == 2
-        assert result[0] == "A"
-        assert result[1] == "B"
-
-    def test_cut_with_labels_long_list(self):
-        """Test cut with labels when list is longer than labels."""
-        # Line 101: labels[:len(x)] when len(x) > len(labels)
-        # The implementation just does labels[:len(x)], so if labels is shorter,
-        # it returns only len(labels) items
-        result = ppd.cut([1, 2, 3, 4, 5], bins=3, labels=["A", "B"])
-        assert len(result) == 2  # Only returns labels[:len(x)], so min(2, 5) = 2
-        assert result[0] == "A"
-        assert result[1] == "B"
+    def test_cut_with_labels_proper_binning(self):
+        """Test cut with labels performs proper binning."""
+        result = ppd.cut([1, 2, 3, 4, 5, 6], bins=3, labels=["A", "B", "C"])
+        assert len(result) == 6
+        # Values should be binned into 3 categories
+        assert all(label in ["A", "B", "C"] for label in result.tolist())
 
     def test_isna_dataframe_edge_cases(self):
         """Test isna with DataFrame edge cases."""

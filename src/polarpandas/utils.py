@@ -136,7 +136,7 @@ def notnull(obj: Any) -> Any:
 
 def cut(
     x: List[Any], bins: Any, labels: Optional[List[str]] = None, **kwargs: Any
-) -> List[Optional[str]]:
+) -> Any:
     """
     Bin values into discrete intervals.
 
@@ -145,30 +145,119 @@ def cut(
     x : List[Any]
         Input array to be binned
     bins : Any
-        Bins to use for cutting
+        Number of bins (int) or explicit bin edges (list)
     labels : List[str], optional
-        Labels for the resulting bins
+        Labels for the resulting bins. Should be of length bins (for int bins)
+        or len(bins)-1 (for list of edges)
     **kwargs
         Additional arguments
 
     Returns
     -------
-    List[Optional[str]]
-        List of bin labels
+    Series or list
+        Series with bin labels or categories, or empty list if input is empty
 
     Examples
     --------
     >>> import polarpandas as ppd
     >>> result = ppd.cut([1, 2, 3, 4, 5], bins=3)
     """
-    # Simplified implementation
-    # In practice, you'd use Polars' cut functionality
-    if labels:
-        result: List[Optional[str]] = list(labels[: len(x)])
-        return result
+    from .series import Series
+
+    # Handle empty list - return empty list for backward compatibility
+    if len(x) == 0:
+        return []
+
+    # Convert input to Polars Series
+    # Handle polarpandas Series
+    pl_series = x._series if isinstance(x, Series) else pl.Series(x)
+
+    # Handle explicit bin edges
+    if isinstance(bins, list):
+        if len(bins) < 2:
+            raise ValueError("bins list must have at least 2 edges")
+
+        # For explicit bins, Polars expects labels to be len(bins) + 1
+        # But pandas expects len(bins) - 1 labels (number of intervals)
+        # We'll create default labels or use provided ones
+        num_intervals = len(bins) - 1
+
+        if labels is not None:
+            if len(labels) != num_intervals:
+                raise ValueError(f"labels must be of length {num_intervals} for {len(bins)} bin edges")
+            # Polars cut needs len(bins) + 1 labels, so we pad
+            labels + [labels[-1]]
+        else:
+            pass
+
+        try:
+            # Use Polars cut - it expects quantiles, not bin edges
+            # So we need to manually bin the data
+            result_categories = []
+            for val in x:
+                if val is None:
+                    result_categories.append(None)
+                else:
+                    # Find which bin this value falls into
+                    bin_idx = None
+                    for i in range(len(bins) - 1):
+                        if bins[i] <= val <= bins[i + 1]:
+                            bin_idx = i
+                            break
+
+                    if bin_idx is not None:
+                        if labels:
+                            result_categories.append(labels[bin_idx])
+                        else:
+                            result_categories.append(f"({bins[bin_idx]}, {bins[bin_idx + 1]}]")
+                    else:
+                        result_categories.append(None)
+
+            return Series(pl.Series(result_categories))
+        except Exception as e:
+            raise ValueError(f"Failed to cut with explicit bins: {e}") from e
+
+    # Handle number of bins
+    elif isinstance(bins, int):
+        if bins <= 0:
+            raise ValueError("Number of bins must be positive")
+
+        # Calculate bin edges
+        min_val = pl_series.min()
+        max_val = pl_series.max()
+
+        if min_val == max_val:
+            # All values are the same
+            if labels:
+                result = pl.Series([labels[0]] * len(x))
+            else:
+                result = pl.Series([f"({min_val}, {max_val}]"] * len(x))
+            return Series(result)
+
+        # Create equal-width bins
+        bin_width = (max_val - min_val) / bins
+        bin_edges = [min_val + bin_width * i for i in range(bins + 1)]
+
+        # Manually bin the data
+        result_categories = []
+        for val in x:
+            if val is None:
+                result_categories.append(None)
+            else:
+                # Find which bin this value falls into
+                bin_idx = min(int((val - min_val) / bin_width), bins - 1)
+
+                if labels:
+                    if bin_idx < len(labels):
+                        result_categories.append(labels[bin_idx])
+                    else:
+                        result_categories.append(labels[-1])
+                else:
+                    result_categories.append(f"({bin_edges[bin_idx]:.2f}, {bin_edges[bin_idx + 1]:.2f}]")
+
+        return Series(pl.Series(result_categories))
     else:
-        result_bins: List[Optional[str]] = [f"bin_{i}" for i in range(len(x))]
-        return result_bins
+        raise TypeError(f"bins must be int or list, got {type(bins)}")
 
 
 def convert_schema_to_polars(

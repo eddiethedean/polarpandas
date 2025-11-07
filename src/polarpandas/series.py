@@ -1591,7 +1591,7 @@ class Series:
         sorted_index = [item[0] for item in indexed_data]
         sorted_values = [item[1] for item in indexed_data]
 
-        result_series = pl.Series(sorted_values, name=self._series.name)
+        result_series = pl.Series(name=self._series.name, values=sorted_values)
 
         new_index = list(range(len(result_series))) if ignore_index else sorted_index
 
@@ -4365,15 +4365,16 @@ class Series:
         """Replace values where condition is True."""
         if isinstance(cond, Series):
             cond = cond._series
-        result = Series(
-            pl.when(cond)
-            .then(pl.lit(other) if other is not None else None)
-            .otherwise(self._series)
-        )
+
+        # Create a DataFrame with one column to use select
+        temp_df = pl.DataFrame({"value": self._series})
+        result_expr = pl.when(cond).then(pl.lit(other) if other is not None else None).otherwise(pl.col("value"))
+        result_series = temp_df.select(result_expr).to_series()
+
         if inplace:
-            self._series = result._series
+            self._series = result_series
             return None
-        return result
+        return Series(result_series)
 
     def reindex(
         self,
@@ -4442,7 +4443,11 @@ class Series:
     def repeat(self, repeats: Any, axis: Any = None, **kwargs: Any) -> "Series":
         """Repeat elements."""
         if isinstance(repeats, int):
-            return Series(self._series.repeat(repeats))
+            # Repeat each element by the given number
+            result_list = []
+            for val in self._series:
+                result_list.extend([val] * repeats)
+            return Series(pl.Series(result_list))
         else:
             # Repeat each element by corresponding value in repeats
             result_list = []
@@ -4621,15 +4626,16 @@ class Series:
         """Replace where condition is False."""
         if isinstance(cond, Series):
             cond = cond._series
-        result = Series(
-            pl.when(cond)
-            .then(self._series)
-            .otherwise(pl.lit(other) if other is not None else None)
-        )
+
+        # Create a DataFrame with one column to use select
+        temp_df = pl.DataFrame({"value": self._series})
+        result_expr = pl.when(cond).then(pl.col("value")).otherwise(pl.lit(other) if other is not None else None)
+        result_series = temp_df.select(result_expr).to_series()
+
         if inplace:
-            self._series = result._series
+            self._series = result_series
             return None
-        return result
+        return Series(result_series)
 
     def xs(
         self,

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-11-07
+
+### Added
+- **`cut()` function** - Proper data binning with support for integer bins and explicit bin edges
+- **Custom labels support** - Ability to specify custom labels for bins in `cut()` function
+- **Test helpers module** - Custom assertion utilities (`assert_frame_equal`, `assert_series_equal`, etc.)
+- **Expected values generator** - Script to generate test expectations using pandas (one-time generation)
+- **Pandas removal infrastructure** - Complete tooling for eliminating pandas dependency from tests
+
+### Fixed
+- **Series.sort_index()** - Fixed Polars Series constructor issue causing TypeError
+- **Series.repeat()** - Implemented proper element repetition (Polars API compatibility)
+- **Series.where()** - Fixed Expr vs Series conversion bug
+- **Series.mask()** - Fixed Expr vs Series conversion bug
+- **13 skipped tests** - Now passing after implementing features and fixing bugs
+
+### Changed
+- **Test suite doubled** - 993 tests passing (up from 498)
+- **Coverage improved** - 48% code coverage (up from 12%)
+- **Skipped tests reduced** - From 114 to 72 with clear documentation
+- **Python 3.9+ recommended** - Better compatibility, no numpy/pandas segfaults
+- **test_dataframe_statistical.py** - Converted to use test helpers (eliminated 79 pandas calls)
+
+### Removed
+- **3 obsolete tests** - Removed tests for unimplemented rolling window operations
+- **60 skipped tests** - Fixed or cleaned up previously skipped tests
+
 ## [0.2.0] - 2024-01-XX
 
 ### Added
