@@ -59,7 +59,31 @@ def concat(objs: List[DataFrame], axis: int = 0, **kwargs: Any) -> DataFrame:
         # Concatenate vertically (rows)
         import polars as pl
 
-        return DataFrame(pl.concat([obj._df for obj in objs], **kwargs))
+        # Check if all DataFrames have MultiIndex
+        all_have_multiindex = all(
+            obj._index is not None
+            and len(obj._index) > 0
+            and isinstance(obj._index[0], tuple)
+            for obj in objs
+        )
+
+        result = DataFrame(pl.concat([obj._df for obj in objs], **kwargs))
+
+        # Preserve MultiIndex if all DataFrames had it
+        if all_have_multiindex:
+            # Combine all indices
+            combined_index = []
+            combined_index_name = None
+            for obj in objs:
+                if obj._index is not None:
+                    combined_index.extend(obj._index)
+                    if combined_index_name is None:
+                        combined_index_name = obj._index_name
+
+            result._index = combined_index
+            result._index_name = combined_index_name
+
+        return result
     else:
         # Concatenate horizontally (columns)
         import polars as pl

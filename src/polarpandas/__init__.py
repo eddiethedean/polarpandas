@@ -67,7 +67,7 @@ from .datetime import (
     to_timedelta,
 )
 from .frame import DataFrame
-from .index import Index
+from .index import Index, MultiIndex
 
 # I/O operations
 from .io import (
@@ -151,6 +151,7 @@ __all__ = [
     "LazyFrame",
     "Series",
     "Index",
+    "MultiIndex",
     # I/O operations
     "read_csv",
     "read_parquet",

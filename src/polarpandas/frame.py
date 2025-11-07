@@ -47,7 +47,7 @@ from polarpandas._exceptions import (
     create_keyerror_with_suggestions,
 )
 from polarpandas._index_manager import IndexManager
-from polarpandas.index import Index
+from polarpandas.index import Index, MultiIndex
 from polarpandas.utils import convert_schema_to_polars
 
 if TYPE_CHECKING:
@@ -2012,8 +2012,23 @@ class DataFrame:
     def index(self) -> Any:
         """Return the index (row labels) of the DataFrame."""
         if self._index is not None:
-            # Return the stored index
-            return Index(self._index)
+            # Check if index contains tuples (MultiIndex)
+            if len(self._index) > 0 and isinstance(self._index[0], tuple):
+                # Create MultiIndex from tuples
+                if isinstance(self._index_name, tuple):
+                    names = list(self._index_name)
+                else:
+                    names = None
+                return MultiIndex.from_tuples(self._index, names=names)
+            else:
+                # Regular Index - preserve name if set
+                idx = Index(self._index)
+                if self._index_name is not None and not isinstance(
+                    self._index_name, tuple
+                ):
+                    # Set index name by updating the underlying series name
+                    idx._series = idx._series.rename(self._index_name)
+                return idx
         else:
             # Create a simple RangeIndex-like object
             return Index(list(range(len(self._df))))
@@ -2476,19 +2491,27 @@ class DataFrame:
             yield (col, Series(self._df[col], index=self._index))
 
     def groupby(
-        self, by: Union[str, List[str]], *args: Any, **kwargs: Any
+        self,
+        by: Union[str, List[str], None] = None,
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> "_GroupBy":
         """
-        Group DataFrame by one or more columns.
+        Group DataFrame by one or more columns or index levels.
 
-        Split the DataFrame into groups based on values in one or more columns.
-        Returns a GroupBy object that can be used for aggregation operations.
+        Split the DataFrame into groups based on values in one or more columns
+        or index levels. Returns a GroupBy object that can be used for aggregation operations.
 
         Parameters
         ----------
-        by : str or list of str
+        by : str, list of str, or None
             Column name(s) to group by. Rows with the same values in these
-            columns will be grouped together.
+            columns will be grouped together. If None and level is specified,
+            groups by index level(s).
+        level : int, str, or list, optional
+            Level(s) of the index to group by. Can be level number or name.
+            Only used if by is None.
         *args
             Additional positional arguments passed to Polars group_by().
         **kwargs
@@ -2514,17 +2537,91 @@ class DataFrame:
         >>> # Group by multiple columns
         >>> gb = df.groupby(["category", "subcategory"])
         >>> result = gb.agg(pl.col("value").sum())
+        >>> # Group by index level
+        >>> df_indexed = df.set_index(['category'])
+        >>> gb = df_indexed.groupby(level=0)
 
         Notes
         -----
         - GroupBy operations in Polars use expressions (e.g., pl.col("x").mean())
           rather than string aggregation functions like pandas
         - The GroupBy object is lazy; aggregations are computed when called
+        - When using level parameter, the level values are extracted and used as
+          temporary columns for grouping
 
         See Also
         --------
         _GroupBy : The GroupBy object returned by this method
         """
+        # Handle level parameter for MultiIndex
+        if level is not None and by is None:
+            # Group by index level(s)
+            if self._index is None or len(self._index) == 0:
+                raise ValueError("Cannot group by level when index is None or empty")
+
+            # Check if MultiIndex
+            is_multiindex = (
+                isinstance(self._index[0], tuple) if len(self._index) > 0 else False
+            )
+
+            if is_multiindex:
+                # Extract level values
+                if isinstance(self._index_name, tuple):
+                    names = list(self._index_name)
+                else:
+                    names = None
+                mi = MultiIndex.from_tuples(self._index, names=names)
+
+                # Convert level to list if single value
+                if isinstance(level, (int, str)):
+                    levels_to_group = [level]
+                else:
+                    levels_to_group = list(level)
+
+                # Extract level values and add as temporary columns
+                temp_df = self._df.clone()
+                level_columns = []
+                for lev in levels_to_group:
+                    level_num = mi.get_level_number(lev)
+                    level_values = mi.get_level_values(level_num).tolist()
+                    level_name = f"__level_{level_num}__"
+                    temp_df = temp_df.with_columns(pl.Series(level_name, level_values))
+                    level_columns.append(level_name)
+
+                # Group by temporary columns
+                polars_gb = temp_df.group_by(level_columns, *args, **kwargs)
+                # Store level info for result processing
+                gb = _GroupBy(polars_gb, self)
+                gb._level_info = {
+                    "level_columns": level_columns,
+                    "level_names": [
+                        mi.names[mi.get_level_number(lev)]
+                        if mi.names and mi.names[mi.get_level_number(lev)]
+                        else f"level_{mi.get_level_number(lev)}"
+                        for lev in levels_to_group
+                    ],
+                    "level_numbers": [
+                        mi.get_level_number(lev) for lev in levels_to_group
+                    ],
+                }
+                return gb
+            else:
+                # Regular Index - can only group by level 0
+                if level != 0 and level != "index":
+                    raise ValueError(
+                        f"Cannot group by level {level} for non-MultiIndex"
+                    )
+                # Use index values as grouping column
+                level_values = self._index
+                temp_df = self._df.clone()
+                temp_df = temp_df.with_columns(pl.Series("__level_0__", level_values))
+                polars_gb = temp_df.group_by("__level_0__", *args, **kwargs)
+                return _GroupBy(polars_gb, self)
+
+        # Normal column-based grouping
+        if by is None:
+            raise ValueError("Must specify either 'by' or 'level' parameter")
+
         # Polars uses group_by() instead of groupby()
         # Return a wrapper for the Polars GroupBy object
         polars_gb = self._df.group_by(by, *args, **kwargs)
@@ -2726,6 +2823,7 @@ class DataFrame:
         axis: Optional[Union[int, Literal["index", "columns"]]] = 0,
         skipna: bool = True,
         numeric_only: bool = False,
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
         **kwargs: Any,
     ) -> Union["Series", Any]:
         """
@@ -2739,6 +2837,8 @@ class DataFrame:
             Exclude NA/null values when computing the result.
         numeric_only : bool, default False
             Include only float, int, boolean columns. If False, will attempt to use everything.
+        level : int, str, or list, optional
+            If the axis is a MultiIndex, sum along a particular level, collapsing into a Series.
         **kwargs
             Additional arguments passed to Polars sum().
 
@@ -2747,7 +2847,19 @@ class DataFrame:
         Series or scalar
             Series when axis=0 (default), scalar when axis=1 or axis=None.
         """
+        import polars as pl
+
         from polarpandas.series import Series
+
+        # Handle level parameter
+        if level is not None and axis == 0:
+            # Group by level and sum - this collapses the MultiIndex along the specified level
+            gb = self.groupby(level=level)
+            # Aggregate all columns
+            expressions = [pl.col(col).sum().alias(col) for col in self.columns]
+            result = gb.agg(expressions)
+            # Return as DataFrame (pandas returns DataFrame for level-based aggregations)
+            return result
 
         if axis is None or axis == 1 or axis == "columns":
             # Row-wise sum (axis=1) - aggregate across columns for each row
@@ -2819,6 +2931,7 @@ class DataFrame:
         axis: Optional[Union[int, Literal["index", "columns"]]] = 0,
         skipna: bool = True,
         numeric_only: bool = False,
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
         **kwargs: Any,
     ) -> Union["Series", Any]:
         """
@@ -2840,7 +2953,19 @@ class DataFrame:
         Series or scalar
             Series when axis=0 (default), scalar when axis=1 or axis=None.
         """
+        import polars as pl
+
         from polarpandas.series import Series
+
+        # Handle level parameter
+        if level is not None and axis == 0:
+            # Group by level and mean - this collapses the MultiIndex along the specified level
+            gb = self.groupby(level=level)
+            # Aggregate all columns
+            expressions = [pl.col(col).mean().alias(col) for col in self.columns]
+            result = gb.agg(expressions)
+            # Return as DataFrame (pandas returns DataFrame for level-based aggregations)
+            return result
 
         if axis is None or axis == 1 or axis == "columns":
             # Row-wise mean (axis=1) - aggregate across columns for each row
@@ -2912,6 +3037,7 @@ class DataFrame:
         axis: Optional[Union[int, Literal["index", "columns"]]] = 0,
         skipna: bool = True,
         numeric_only: bool = False,
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
         **kwargs: Any,
     ) -> Union["Series", Any]:
         """
@@ -2925,6 +3051,8 @@ class DataFrame:
             Exclude NA/null values when computing the result.
         numeric_only : bool, default False
             Include only float, int, boolean columns. If False, will attempt to use everything.
+        level : int, str, or list, optional
+            If the axis is a MultiIndex, compute minimum along a particular level, collapsing into a Series.
         **kwargs
             Additional arguments passed to Polars min().
 
@@ -2933,7 +3061,19 @@ class DataFrame:
         Series or scalar
             Series when axis=0 (default), scalar when axis=1 or axis=None.
         """
+        import polars as pl
+
         from polarpandas.series import Series
+
+        # Handle level parameter
+        if level is not None and axis == 0:
+            # Group by level and min - this collapses the MultiIndex along the specified level
+            gb = self.groupby(level=level)
+            # Aggregate all columns
+            expressions = [pl.col(col).min().alias(col) for col in self.columns]
+            result = gb.agg(expressions)
+            # Return as DataFrame (pandas returns DataFrame for level-based aggregations)
+            return result
 
         if axis is None or axis == 1 or axis == "columns":
             # Row-wise min (axis=1) - aggregate across columns for each row
@@ -3005,6 +3145,7 @@ class DataFrame:
         axis: Optional[Union[int, Literal["index", "columns"]]] = 0,
         skipna: bool = True,
         numeric_only: bool = False,
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
         **kwargs: Any,
     ) -> Union["Series", Any]:
         """
@@ -3018,6 +3159,8 @@ class DataFrame:
             Exclude NA/null values when computing the result.
         numeric_only : bool, default False
             Include only float, int, boolean columns. If False, will attempt to use everything.
+        level : int, str, or list, optional
+            If the axis is a MultiIndex, compute maximum along a particular level, collapsing into a Series.
         **kwargs
             Additional arguments passed to Polars max().
 
@@ -3026,7 +3169,19 @@ class DataFrame:
         Series or scalar
             Series when axis=0 (default), scalar when axis=1 or axis=None.
         """
+        import polars as pl
+
         from polarpandas.series import Series
+
+        # Handle level parameter
+        if level is not None and axis == 0:
+            # Group by level and max - this collapses the MultiIndex along the specified level
+            gb = self.groupby(level=level)
+            # Aggregate all columns
+            expressions = [pl.col(col).max().alias(col) for col in self.columns]
+            result = gb.agg(expressions)
+            # Return as DataFrame (pandas returns DataFrame for level-based aggregations)
+            return result
 
         if axis is None or axis == 1 or axis == "columns":
             # Row-wise max (axis=1) - aggregate across columns for each row
@@ -3099,6 +3254,7 @@ class DataFrame:
         skipna: bool = True,
         ddof: int = 1,
         numeric_only: bool = False,
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
         **kwargs: Any,
     ) -> Union["Series", Any]:
         """
@@ -3114,6 +3270,8 @@ class DataFrame:
             Delta degrees of freedom. The divisor used in calculations is N - ddof, where N represents the number of elements.
         numeric_only : bool, default False
             Include only float, int, boolean columns. If False, will attempt to use everything.
+        level : int, str, or list, optional
+            If the axis is a MultiIndex, compute standard deviation along a particular level, collapsing into a Series.
         **kwargs
             Additional arguments passed to Polars std().
 
@@ -3122,7 +3280,21 @@ class DataFrame:
         Series or scalar
             Series when axis=0 (default), scalar when axis=1 or axis=None.
         """
+        import polars as pl
+
         from polarpandas.series import Series
+
+        # Handle level parameter
+        if level is not None and axis == 0:
+            # Group by level and std - this collapses the MultiIndex along the specified level
+            gb = self.groupby(level=level)
+            # Aggregate all columns
+            expressions = [
+                pl.col(col).std(ddof=ddof).alias(col) for col in self.columns
+            ]
+            result = gb.agg(expressions)
+            # Return as DataFrame (pandas returns DataFrame for level-based aggregations)
+            return result
 
         if axis is None or axis == 1 or axis == "columns":
             # Row-wise std (axis=1) - aggregate across columns for each row
@@ -3202,6 +3374,7 @@ class DataFrame:
         skipna: bool = True,
         ddof: int = 1,
         numeric_only: bool = False,
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
         **kwargs: Any,
     ) -> Union["Series", Any]:
         """
@@ -3225,7 +3398,21 @@ class DataFrame:
         Series or scalar
             Series when axis=0 (default), scalar when axis=1 or axis=None.
         """
+        import polars as pl
+
         from polarpandas.series import Series
+
+        # Handle level parameter
+        if level is not None and axis == 0:
+            # Group by level and var - this collapses the MultiIndex along the specified level
+            gb = self.groupby(level=level)
+            # Aggregate all columns
+            expressions = [
+                pl.col(col).var(ddof=ddof).alias(col) for col in self.columns
+            ]
+            result = gb.agg(expressions)
+            # Return as DataFrame (pandas returns DataFrame for level-based aggregations)
+            return result
 
         if axis is None or axis == 1 or axis == "columns":
             # Row-wise var (axis=1) - aggregate across columns for each row
@@ -3404,6 +3591,7 @@ class DataFrame:
         axis: Optional[Union[int, Literal["index", "columns"]]] = 0,
         skipna: bool = True,
         numeric_only: bool = False,
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
         **kwargs: Any,
     ) -> Union["Series", Any]:
         """
@@ -3425,7 +3613,19 @@ class DataFrame:
         Series
             Series with medians for each column (axis=0) or row (axis=1).
         """
+        import polars as pl
+
         from polarpandas.series import Series
+
+        # Handle level parameter
+        if level is not None and axis == 0:
+            # Group by level and median - this collapses the MultiIndex along the specified level
+            gb = self.groupby(level=level)
+            # Aggregate all columns
+            expressions = [pl.col(col).median().alias(col) for col in self.columns]
+            result = gb.agg(expressions)
+            # Return as DataFrame (pandas returns DataFrame for level-based aggregations)
+            return result
 
         if axis is None or axis == 1 or axis == "columns":
             # Row-wise median (axis=1) - aggregate across columns for each row
@@ -6396,7 +6596,7 @@ class DataFrame:
         Parameters
         ----------
         drop : bool, default False
-            Whether to drop the index or add it as a column
+            Whether to drop the index or add it as a column(s)
         inplace : bool, default False
             If True, modify DataFrame in place
 
@@ -6405,19 +6605,59 @@ class DataFrame:
         DataFrame or None
             DataFrame with reset index, or None if inplace=True
         """
-        # For simple range indices, this is mostly a no-op
-        # In a full implementation, this would handle custom indices
-        if not drop:  # noqa: SIM108
-            # Add index as a column
-            result_df = self._df.with_row_index("index")
+        if not drop:
+            # Add index as column(s)
+            result_df = self._df.clone()
+
+            if self._index is not None:
+                # Check if MultiIndex
+                if len(self._index) > 0 and isinstance(self._index[0], tuple):
+                    # MultiIndex - add each level as a column
+                    if isinstance(self._index_name, tuple):
+                        col_names = list(self._index_name)
+                    else:
+                        col_names = [f"level_{i}" for i in range(len(self._index[0]))]
+
+                    # Extract each level and create columns
+                    index_cols = {}
+                    for level_idx, col_name in enumerate(col_names):
+                        level_values = [
+                            t[level_idx] if level_idx < len(t) else None
+                            for t in self._index
+                        ]
+                        index_cols[col_name] = pl.Series(col_name, level_values)
+
+                    # Reorder: index columns first, then data columns
+                    data_cols = {col: result_df[col] for col in result_df.columns}
+                    result_df = pl.DataFrame({**index_cols, **data_cols})
+                else:
+                    # Regular Index - add as single column
+                    col_name = (
+                        self._index_name
+                        if isinstance(self._index_name, str)
+                        else "index"
+                    )
+                    index_col = pl.Series(col_name, self._index)
+                    # Reorder: index column first, then data columns
+                    data_cols = {col: result_df[col] for col in result_df.columns}
+                    result_df = pl.DataFrame({col_name: index_col, **data_cols})
+            else:
+                # No index - add default range index
+                result_df = result_df.with_row_index("index")
         else:
             result_df = self._df.clone()
 
+        result = DataFrame(result_df)
+        result._index = None
+        result._index_name = None
+
         if inplace:
-            self._df = result_df
+            self._df = result._df
+            self._index = None
+            self._index_name = None
             return None
         else:
-            return DataFrame(result_df)
+            return result
 
     def _validate_index_keys(self, keys: Union[str, List[str]]) -> List[str]:
         """Validate and normalize index keys.
@@ -6742,9 +6982,42 @@ class DataFrame:
         DataFrame
             DataFrame with level(s) removed
         """
-        # Simplified implementation - for now just return copy
-        # Full implementation would need multi-index support
-        return self.copy()
+        if axis == 0:
+            # Drop from index
+            if self._index is None or len(self._index) == 0:
+                return self.copy()
+
+            # Check if MultiIndex
+            if isinstance(self._index[0], tuple):
+                # Create MultiIndex and drop level
+                if isinstance(self._index_name, tuple):
+                    names = list(self._index_name)
+                else:
+                    names = None
+                mi = MultiIndex.from_tuples(self._index, names=names)
+                new_mi = mi.droplevel(level)
+
+                # Convert back to list format
+                if isinstance(new_mi, MultiIndex):
+                    result = self.copy()
+                    result._index = new_mi.tolist()
+                    result._index_name = new_mi.names if new_mi.names else None
+                    return result
+                else:
+                    # Converted to Index - preserve the name
+                    result = self.copy()
+                    result._index = new_mi.tolist()
+                    # Get the name from the Index's series name
+                    result._index_name = (
+                        new_mi._series.name if new_mi._series.name != "index" else None
+                    )
+                    return result
+            else:
+                # Regular Index - can't drop level
+                return self.copy()
+        else:
+            # Column level dropping not yet implemented
+            return self.copy()
 
     def reindex_like(self, other: "DataFrame", **kwargs: Any) -> "DataFrame":
         """
@@ -6831,8 +7104,31 @@ class DataFrame:
         DataFrame
             DataFrame with reordered levels
         """
-        # Simplified implementation - would need multi-index support
-        return self.copy()
+        if axis == 0:
+            # Reorder index levels
+            if self._index is None or len(self._index) == 0:
+                return self.copy()
+
+            # Check if MultiIndex
+            if isinstance(self._index[0], tuple):
+                # Create MultiIndex and reorder
+                if isinstance(self._index_name, tuple):
+                    names = list(self._index_name)
+                else:
+                    names = None
+                mi = MultiIndex.from_tuples(self._index, names=names)
+                new_mi = mi.reorder_levels(order)
+
+                result = self.copy()
+                result._index = new_mi.tolist()
+                result._index_name = new_mi.names if new_mi.names else None
+                return result
+            else:
+                # Regular Index - can't reorder
+                return self.copy()
+        else:
+            # Column level reordering not yet implemented
+            return self.copy()
 
     def swaplevel(
         self, i: Union[int, str] = -2, j: Union[int, str] = -1, axis: int = 0
@@ -6854,8 +7150,31 @@ class DataFrame:
         DataFrame
             DataFrame with swapped levels
         """
-        # Simplified implementation - would need multi-index support
-        return self.copy()
+        if axis == 0:
+            # Swap index levels
+            if self._index is None or len(self._index) == 0:
+                return self.copy()
+
+            # Check if MultiIndex
+            if isinstance(self._index[0], tuple):
+                # Create MultiIndex and swap
+                if isinstance(self._index_name, tuple):
+                    names = list(self._index_name)
+                else:
+                    names = None
+                mi = MultiIndex.from_tuples(self._index, names=names)
+                new_mi = mi.swaplevel(i, j)
+
+                result = self.copy()
+                result._index = new_mi.tolist()
+                result._index_name = new_mi.names if new_mi.names else None
+                return result
+            else:
+                # Regular Index - can't swap
+                return self.copy()
+        else:
+            # Column level swapping not yet implemented
+            return self.copy()
 
     def take(self, indices: Any, axis: int = 0, **kwargs: Any) -> "DataFrame":
         """
@@ -7187,8 +7506,19 @@ class DataFrame:
         if len(self._df.columns) == 0:
             return DataFrame()
 
+        # Check if we have a MultiIndex
+        has_multiindex = (
+            self._index is not None
+            and len(self._index) > 0
+            and isinstance(self._index[0], tuple)
+        )
+
         # Use Polars transpose with column names from index if available
-        column_names = self._index if self._index else None
+        if has_multiindex:
+            # Convert MultiIndex tuples to strings for Polars column names
+            column_names = [str(t) for t in self._index]
+        else:
+            column_names = self._index if self._index else None
 
         try:
             transposed = self._df.transpose(
@@ -7196,10 +7526,21 @@ class DataFrame:
             )
             result = DataFrame(transposed)
 
-            # Rename columns to match pandas (0, 1, 2, ...)
-            num_cols = len(transposed.columns)
-            new_columns = [str(i) for i in range(num_cols)]
-            result._df = result._df.rename(dict(zip(result._df.columns, new_columns)))
+            # If we had a MultiIndex, it becomes the columns (stored as strings in Polars)
+            # We need to restore it when converting to pandas
+            if has_multiindex:
+                # Store the MultiIndex column information
+                result._column_index = self._index
+                result._column_index_name = self._index_name
+                # Columns are already set to MultiIndex tuple strings by Polars
+            else:
+                # Rename columns to match pandas (0, 1, 2, ...) if no index
+                if column_names is None:
+                    num_cols = len(transposed.columns)
+                    new_columns = [str(i) for i in range(num_cols)]
+                    result._df = result._df.rename(
+                        dict(zip(result._df.columns, new_columns))
+                    )
 
             # Set index from original columns
             result._index = list(self._df.columns)
@@ -7275,8 +7616,8 @@ class DataFrame:
                 mask = (
                     np.isnan(result.astype(float))
                     if result.dtype.kind in "biu"
-                    else (result == None)
-                )  # noqa: E711
+                    else (result is None)
+                )
                 result = np.where(mask, na_value, result)
 
         return result
@@ -7342,31 +7683,40 @@ class DataFrame:
                 self._df.write_csv(path, **polars_kwargs)
                 return None
 
-        # Handle index=True case - add index as first column
+        # Handle index=True case - add index as first column(s)
         else:  # index_param is True
-            # Create a copy with index as a column
-            df_to_write = self._df.clone()
+            # Check if we have a MultiIndex (tuples in _index)
+            has_multiindex = (
+                self._index is not None
+                and len(self._index) > 0
+                and isinstance(self._index[0], tuple)
+            )
 
-            # Add index column if we have one
-            if self._index is not None:
-                index_name = (
-                    self._index_name if self._index_name is not None else "index"
-                )
-                # Ensure index_name is a string (not tuple)
-                if isinstance(index_name, tuple):
-                    index_name = "_".join(str(n) for n in index_name)
-
-                # Add index as first column
-                df_to_write = df_to_write.with_columns(
-                    pl.Series(index_name, self._index)
-                ).select([index_name] + df_to_write.columns)
+            if has_multiindex:
+                # For MultiIndex, flatten it into separate columns like pandas does
+                # Use reset_index() to convert MultiIndex to columns
+                df_with_index = self.reset_index(drop=False)
+                df_to_write = df_with_index._df
             else:
-                # No stored index - use integer index
-                df_to_write = df_to_write.with_row_index("index").select(
-                    ["index"] + df_to_write.columns
-                )
+                # Regular index - add as a single column
+                df_to_write = self._df.clone()
 
-            # Write with index column included
+                # Add index column if we have one
+                if self._index is not None:
+                    index_name = (
+                        self._index_name if self._index_name is not None else "index"
+                    )
+                    # Add index as first column
+                    df_to_write = df_to_write.with_columns(
+                        pl.Series(index_name, self._index)
+                    ).select([index_name] + df_to_write.columns)
+                else:
+                    # No stored index - use integer index
+                    df_to_write = df_to_write.with_row_index("index").select(
+                        ["index"] + df_to_write.columns
+                    )
+
+            # Write with index column(s) included
             if path is None:
                 return df_to_write.write_csv(**polars_kwargs)  # type: ignore[no-any-return]
             else:
@@ -7476,21 +7826,40 @@ class DataFrame:
                     if hasattr(pandas_df.index, "name"):
                         pandas_df.index.name = index_name_value
 
+        # Handle MultiIndex columns (from transpose)
+        if hasattr(self, "_column_index") and self._column_index is not None:
+            # Restore MultiIndex columns
+            if isinstance(self._column_index[0], tuple):
+                # MultiIndex columns
+                pandas_df.columns = pd.MultiIndex.from_tuples(
+                    self._column_index,
+                    names=self._column_index_name
+                    if hasattr(self, "_column_index_name")
+                    else None,
+                )
+            else:
+                # Regular Index columns
+                pandas_df.columns = pd.Index(self._column_index)
+                if hasattr(self, "_column_index_name") and self._column_index_name:
+                    pandas_df.columns.name = self._column_index_name
+
         # Convert string column names that look like integers to RangeIndex
-        try:
-            # Check if all column names are string representations of consecutive integers starting from 0
-            col_names = list(pandas_df.columns)
-            # Type guard: ensure all names are strings before checking isdigit
-            if all(isinstance(name, str) and name.isdigit() for name in col_names):
-                int_cols = [int(name) for name in col_names]
-                if int_cols == list(range(len(int_cols))):
-                    # Convert to RangeIndex
-                    pandas_df.columns = pd.RangeIndex(
-                        start=0, stop=len(int_cols), step=1
-                    )
-        except Exception:
-            # If conversion fails, keep original column names
-            pass
+        # (but skip if we just set MultiIndex columns)
+        if not (hasattr(self, "_column_index") and self._column_index is not None):
+            try:
+                # Check if all column names are string representations of consecutive integers starting from 0
+                col_names = list(pandas_df.columns)
+                # Type guard: ensure all names are strings before checking isdigit
+                if all(isinstance(name, str) and name.isdigit() for name in col_names):
+                    int_cols = [int(name) for name in col_names]
+                    if int_cols == list(range(len(int_cols))):
+                        # Convert to RangeIndex
+                        pandas_df.columns = pd.RangeIndex(
+                            start=0, stop=len(int_cols), step=1
+                        )
+            except Exception:
+                # If conversion fails, keep original column names
+                pass
 
         return pandas_df
 
@@ -11049,9 +11418,42 @@ class _LocIndexer:
     def __getitem__(self, key: Any) -> Union["Series", "DataFrame", Any]:
         """Get items by label."""
         if isinstance(key, tuple):
-            # Row and column indexing: df.loc[row, col]
-            row_key, col_key = key
-            return self._get_rows_cols(row_key, col_key)
+            # Check if this is a MultiIndex row key or (row, col) tuple
+            # If we have a MultiIndex and the tuple matches the index structure, it's a row key
+            is_multiindex = (
+                self._df._index is not None
+                and len(self._df._index) > 0
+                and isinstance(self._df._index[0], tuple)
+            )
+
+            if len(key) == 2:
+                # Could be (row, col) or MultiIndex row key
+                # Check if the first element is a tuple (indicating (row, col) indexing)
+                # or if the entire key is a MultiIndex row key
+                first_is_tuple = isinstance(key[0], tuple)
+                # Check if the key contains slices (MultiIndex slice tuple like ('bar', slice(None)))
+                has_slice = any(
+                    isinstance(k, slice) for k in key if isinstance(k, (tuple, slice))
+                ) or any(isinstance(k, slice) for k in key)
+
+                if first_is_tuple or has_slice:
+                    # This is (row, col) indexing where row is a tuple
+                    row_key, col_key = key
+                    return self._get_rows_cols(row_key, col_key)
+                # Check if the entire key is a MultiIndex row key (no slices, first element not a tuple)
+                elif is_multiindex and len(key) == len(self._df._index[0]):
+                    # This is a MultiIndex row key, not (row, col)
+                    return self._get_rows(key)
+                # Otherwise, it's (row, col) indexing
+                else:
+                    row_key, col_key = key
+                    return self._get_rows_cols(row_key, col_key)
+            elif is_multiindex and len(key) == len(self._df._index[0]):
+                # This is a MultiIndex row key, not (row, col)
+                return self._get_rows(key)
+            else:
+                # MultiIndex row key with different length - treat as row key
+                return self._get_rows(key)
         else:
             # Row-only indexing: df.loc[row]
             return self._get_rows(key)
@@ -11092,40 +11494,206 @@ class _LocIndexer:
 
         # Use Polars for row selection - limited label-based support
         if self._df._index is not None:
+            # Check if MultiIndex
+            is_multiindex = len(self._df._index) > 0 and isinstance(
+                self._df._index[0], tuple
+            )
+
             # Find row index by label
+            drop_matched_level = False  # Initialize for all paths
             try:
                 if isinstance(row_key, slice):
                     # Handle slice with labels
-                    start_idx = (
-                        self._df._index.index(row_key.start)
-                        if row_key.start is not None
-                        else 0
-                    )
-                    stop_idx = (
-                        self._df._index.index(row_key.stop)
-                        if row_key.stop is not None
-                        else len(self._df._index)
-                    )
-                    row_indices = list(range(start_idx, stop_idx))
+                    if is_multiindex:
+                        # For MultiIndex, use MultiIndex.get_loc for slices
+                        if isinstance(self._df._index_name, tuple):
+                            names = list(self._df._index_name)
+                        else:
+                            names = None
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        # For slices with MultiIndex, we need to handle differently
+                        # For now, use simple index-based approach
+                        start_idx = (
+                            self._df._index.index(row_key.start)
+                            if row_key.start is not None
+                            and row_key.start in self._df._index
+                            else 0
+                        )
+                        stop_idx = (
+                            self._df._index.index(row_key.stop)
+                            if row_key.stop is not None
+                            and row_key.stop in self._df._index
+                            else len(self._df._index)
+                        )
+                        row_indices = list(range(start_idx, stop_idx))
+                        drop_matched_level = False
+                    else:
+                        start_idx = (
+                            self._df._index.index(row_key.start)
+                            if row_key.start is not None
+                            else 0
+                        )
+                        stop_idx = (
+                            self._df._index.index(row_key.stop)
+                            if row_key.stop is not None
+                            else len(self._df._index)
+                        )
+                        row_indices = list(range(start_idx, stop_idx))
                 elif isinstance(row_key, list):
                     # Handle list of labels
-                    row_indices = [self._df._index.index(label) for label in row_key]
+                    if is_multiindex:
+                        # Use MultiIndex.get_loc for each label
+                        if isinstance(self._df._index_name, tuple):
+                            names = list(self._df._index_name)
+                        else:
+                            names = None
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        row_indices = []
+                        for label in row_key:
+                            loc_result = mi.get_loc(label)
+                            if isinstance(loc_result, int):
+                                row_indices.append(loc_result)
+                            elif isinstance(loc_result, list):
+                                row_indices.extend(loc_result)
+                        # For list of tuple keys, don't drop levels (exact matches)
+                        drop_matched_level = False
+                    else:
+                        row_indices = [
+                            self._df._index.index(label) for label in row_key
+                        ]
                 else:
-                    # Single label
-                    row_indices = [self._df._index.index(row_key)]
+                    # Single label or tuple - handle tuple keys for MultiIndex
+                    drop_matched_level = False
+                    if is_multiindex:
+                        # Use MultiIndex.get_loc for better support
+                        if isinstance(self._df._index_name, tuple):
+                            names = list(self._df._index_name)
+                        else:
+                            names = None
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        # Handle tuple keys (including slice tuples like ('bar', slice(None)))
+                        if isinstance(row_key, tuple):
+                            # Tuple key - could be exact match or slice tuple
+                            loc_result = mi.get_loc(row_key)
+                            if isinstance(loc_result, int):
+                                row_indices = [loc_result]
+                                drop_matched_level = False
+                            elif isinstance(loc_result, list):
+                                row_indices = loc_result
+                                # Check if this is a partial match (not all levels specified or has slices)
+                                has_slice = any(isinstance(k, slice) for k in row_key)
+                                if has_slice or len(row_key) < mi.nlevels:
+                                    # Partial match with slice - don't drop level, keep full MultiIndex
+                                    drop_matched_level = False
+                                else:
+                                    drop_matched_level = False  # Full tuple match
+                            else:
+                                row_indices = [loc_result]
+                                drop_matched_level = False
+                        else:
+                            # Single scalar key - partial match
+                            loc_result = mi.get_loc(row_key)
+                            if isinstance(loc_result, int):
+                                row_indices = [loc_result]
+                                drop_matched_level = False
+                            elif isinstance(loc_result, list):
+                                row_indices = loc_result
+                                # Partial key match - drop the matched level from result
+                                drop_matched_level = True
+                            else:
+                                row_indices = [loc_result]
+                                drop_matched_level = False
+                    else:
+                        # Regular index
+                        row_indices = [self._df._index.index(row_key)]
 
                 # Select rows by integer indices
                 if len(row_indices) == 1:
                     # Single row - return as Series
+                    import polars as pl
+
                     from polarpandas.series import Series
 
-                    return Series(polars_df[row_indices[0]])  # type: ignore[arg-type]
+                    # Use slice to get single row, then convert to Series
+                    row_data = polars_df.slice(row_indices[0], 1)
+                    # Get values from the first (and only) row
+                    values = [row_data[col][0] for col in row_data.columns]
+                    # Set Series name to the index label if it's a MultiIndex
+                    series_name = None
+                    original_name = None
+                    if is_multiindex and self._df._index is not None:
+                        index_label = self._df._index[row_indices[0]]
+                        # For MultiIndex, pandas uses the tuple as the name
+                        if isinstance(index_label, tuple):
+                            original_name = index_label
+                            # Convert tuple to string for Polars compatibility
+                            series_name = (
+                                str(index_label)
+                                if len(index_label) > 1
+                                else (index_label[0] if len(index_label) == 1 else None)
+                            )
+                        else:
+                            series_name = index_label
+                            original_name = index_label
+                    result_series = Series(
+                        values, index=row_data.columns, name=series_name
+                    )
+                    # Store original tuple name for pandas compatibility
+                    if original_name is not None and isinstance(original_name, tuple):
+                        result_series._original_name = original_name
+                    return result_series
                 else:
                     # Multiple rows - return as DataFrame
                     selected_df = polars_df[row_indices]
-                    result = DataFrame(selected_df)
+                    result = DataFrame(selected_df, index_name=self._df._index_name)
                     # Preserve index for selected rows
-                    result._index = [self._df._index[i] for i in row_indices]
+                    selected_index = [self._df._index[i] for i in row_indices]
+
+                    # If partial key match on MultiIndex, drop the matched level
+                    if is_multiindex and drop_matched_level and selected_index:
+                        # Drop first level from index tuples
+                        if (
+                            isinstance(selected_index[0], tuple)
+                            and len(selected_index[0]) > 1
+                        ):
+                            # Extract remaining levels
+                            remaining_levels = [
+                                tup[1:] if len(tup) > 1 else tup
+                                for tup in selected_index
+                            ]
+                            # If only one level remains, convert to regular Index (not MultiIndex)
+                            if len(remaining_levels[0]) == 1:
+                                # Single level - convert to regular Index
+                                result._index = [
+                                    tup[0] if isinstance(tup, tuple) else tup
+                                    for tup in remaining_levels
+                                ]
+                                # Update index name to the remaining level name
+                                if (
+                                    isinstance(self._df._index_name, tuple)
+                                    and len(self._df._index_name) > 1
+                                ):
+                                    result._index_name = self._df._index_name[1]
+                                else:
+                                    result._index_name = None
+                            else:
+                                # Multiple levels remain - keep as MultiIndex
+                                result._index = remaining_levels
+                                # Update index names - drop first level name
+                                if (
+                                    isinstance(self._df._index_name, tuple)
+                                    and len(self._df._index_name) > 1
+                                ):
+                                    result._index_name = self._df._index_name[1:]
+                                else:
+                                    result._index_name = None
+                        else:
+                            result._index = selected_index
+                            result._index_name = self._df._index_name
+                    else:
+                        result._index = selected_index
+                        # Preserve index names from original DataFrame
+                        result._index_name = self._df._index_name
                     return result
             except ValueError as e:
                 raise KeyError(f"'{row_key}' not in index") from e
@@ -11192,27 +11760,80 @@ class _LocIndexer:
 
         # Use Polars for row/column selection - limited label-based support
         if self._df._index is not None:
+            # Check if MultiIndex
+            is_multiindex = len(self._df._index) > 0 and isinstance(
+                self._df._index[0], tuple
+            )
+
             # Find row index by label
             try:
                 if isinstance(row_key, slice):
                     # Handle slice with labels
-                    start_idx = (
-                        self._df._index.index(row_key.start)
-                        if row_key.start is not None
-                        else 0
-                    )
-                    stop_idx = (
-                        self._df._index.index(row_key.stop)
-                        if row_key.stop is not None
-                        else len(self._df._index)
-                    )
-                    row_indices = list(range(start_idx, stop_idx))
+                    if is_multiindex:
+                        start_idx = (
+                            self._df._index.index(row_key.start)
+                            if row_key.start is not None
+                            and row_key.start in self._df._index
+                            else 0
+                        )
+                        stop_idx = (
+                            self._df._index.index(row_key.stop)
+                            if row_key.stop is not None
+                            and row_key.stop in self._df._index
+                            else len(self._df._index)
+                        )
+                        row_indices = list(range(start_idx, stop_idx))
+                    else:
+                        start_idx = (
+                            self._df._index.index(row_key.start)
+                            if row_key.start is not None
+                            else 0
+                        )
+                        stop_idx = (
+                            self._df._index.index(row_key.stop)
+                            if row_key.stop is not None
+                            else len(self._df._index)
+                        )
+                        row_indices = list(range(start_idx, stop_idx))
                 elif isinstance(row_key, list):
                     # Handle list of labels
-                    row_indices = [self._df._index.index(label) for label in row_key]
+                    if is_multiindex:
+                        # Use MultiIndex.get_loc for each label
+                        if isinstance(self._df._index_name, tuple):
+                            names = list(self._df._index_name)
+                        else:
+                            names = None
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        row_indices = []
+                        for label in row_key:
+                            loc_result = mi.get_loc(label)
+                            if isinstance(loc_result, int):
+                                row_indices.append(loc_result)
+                            elif isinstance(loc_result, list):
+                                row_indices.extend(loc_result)
+                    else:
+                        row_indices = [
+                            self._df._index.index(label) for label in row_key
+                        ]
                 else:
-                    # Single label
-                    row_indices = [self._df._index.index(row_key)]
+                    # Single label - handle tuple keys for MultiIndex
+                    if is_multiindex:
+                        # Use MultiIndex.get_loc for better support
+                        if isinstance(self._df._index_name, tuple):
+                            names = list(self._df._index_name)
+                        else:
+                            names = None
+                        mi = MultiIndex.from_tuples(self._df._index, names=names)
+                        loc_result = mi.get_loc(row_key)
+                        if isinstance(loc_result, int):
+                            row_indices = [loc_result]
+                        elif isinstance(loc_result, list):
+                            row_indices = loc_result
+                        else:
+                            row_indices = [loc_result]
+                    else:
+                        # Regular index
+                        row_indices = [self._df._index.index(row_key)]
 
                 # Select rows and columns
                 if len(row_indices) == 1 and isinstance(col_key, str):
@@ -11221,15 +11842,51 @@ class _LocIndexer:
                     return row_values[col_key]
                 elif len(row_indices) == 1:
                     # Single row, multiple columns - return as Series
+                    import polars as pl
+
                     from polarpandas.series import Series
 
-                    return Series(polars_df[row_indices[0], col_key])
+                    # Get the row and selected columns
+                    if isinstance(col_key, list):
+                        # Multiple columns - create Series with column names as index
+                        row_data = polars_df.slice(row_indices[0], 1)
+                        values = [row_data[col][0] for col in col_key]
+                        # Set Series name to the index label if it's a MultiIndex
+                        series_name = None
+                        original_name = None
+                        if is_multiindex and self._df._index is not None:
+                            index_label = self._df._index[row_indices[0]]
+                            if isinstance(index_label, tuple):
+                                original_name = index_label
+                                series_name = (
+                                    str(index_label)
+                                    if len(index_label) > 1
+                                    else (
+                                        index_label[0]
+                                        if len(index_label) == 1
+                                        else None
+                                    )
+                                )
+                            else:
+                                series_name = index_label
+                                original_name = index_label
+                        result_series = Series(values, index=col_key, name=series_name)
+                        if original_name is not None and isinstance(
+                            original_name, tuple
+                        ):
+                            result_series._original_name = original_name
+                        return result_series
+                    else:
+                        # Single column
+                        return Series(polars_df[row_indices[0], col_key])
                 else:
                     # Multiple rows - return as DataFrame
                     selected_df = polars_df[row_indices, col_key]
-                    result = DataFrame(selected_df)
+                    result = DataFrame(selected_df, index_name=self._df._index_name)
                     # Preserve index for selected rows
                     result._index = [self._df._index[i] for i in row_indices]
+                    # Preserve index names
+                    result._index_name = self._df._index_name
                     return result
             except ValueError as e:
                 raise KeyError(f"'{row_key}' not in index") from e
@@ -12007,7 +12664,24 @@ class _ILocIndexer:
         # Use Polars for integer-based indexing
         if isinstance(row_key, (slice, list)):
             selected_df = polars_df[row_key]
-            return DataFrame(selected_df)
+            result = DataFrame(selected_df, index_name=self._df._index_name)
+            # Preserve index for selected rows
+            if self._df._index is not None:
+                if isinstance(row_key, slice):
+                    # Convert slice to list of indices
+                    start = row_key.start if row_key.start is not None else 0
+                    stop = (
+                        row_key.stop
+                        if row_key.stop is not None
+                        else len(self._df._index)
+                    )
+                    step = row_key.step if row_key.step is not None else 1
+                    selected_indices = list(range(start, stop, step))
+                else:
+                    selected_indices = row_key
+                result._index = [self._df._index[i] for i in selected_indices]
+                result._index_name = self._df._index_name
+            return result
         else:
             # Single row - return as Series
             from polarpandas.series import Series
@@ -12702,7 +13376,47 @@ class _GroupBy:
             Aggregated DataFrame
         """
         result = self._gb.agg(*args, **kwargs)
-        return DataFrame(result)
+        result_df = DataFrame(result)
+
+        # Handle level-based grouping - rename temporary columns and set as index
+        if hasattr(self, "_level_info") and self._level_info:
+            level_columns = self._level_info["level_columns"]
+            level_names = self._level_info["level_names"]
+
+            # Rename temporary level columns to level names
+            rename_map = dict(zip(level_columns, level_names))
+            result_polars = result_df._df.rename(rename_map)
+            result_df = DataFrame(result_polars)
+
+            # Set level columns as index
+            level_values_list = []
+            for col in level_names:
+                if col in result_df.columns:
+                    level_values_list.append(result_df[col].tolist())
+                    result_df = result_df.drop(columns=[col])
+
+            # Create MultiIndex from level values if multiple levels, or regular Index if single
+            if len(level_values_list) > 1:
+                # Multiple levels - create MultiIndex tuples
+                # Sort by level values to match pandas behavior
+                combined = list(zip(*level_values_list))
+                result_df._index = combined
+                result_df._index_name = tuple(level_names)
+            elif len(level_values_list) == 1:
+                # Single level - create regular Index
+                # Sort to match pandas behavior (pandas groupby sorts by group keys)
+                level_values = level_values_list[0]
+                # Create sorted index and reorder DataFrame rows accordingly
+                sorted_pairs = sorted(enumerate(level_values), key=lambda x: x[1])
+                sorted_indices = [i for i, _ in sorted_pairs]
+                sorted_level_values = [v for _, v in sorted_pairs]
+
+                # Reorder DataFrame rows to match sorted index
+                result_df = result_df.iloc[sorted_indices]
+                result_df._index = sorted_level_values
+                result_df._index_name = level_names[0] if level_names else None
+
+        return result_df
 
     def __getattr__(self, name: str) -> Any:
         """Delegate attribute access to the underlying Polars GroupBy object."""

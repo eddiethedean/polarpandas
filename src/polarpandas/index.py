@@ -1180,3 +1180,898 @@ class Index:
         from polarpandas.series import Series
 
         return Series(self._series).str
+
+
+class MultiIndex(Index):
+    """
+    A multi-level, or hierarchical, Index object.
+
+    MultiIndex is an extension of Index that allows multiple levels of indexing
+    on a single axis. It provides hierarchical indexing capabilities similar to
+    pandas MultiIndex.
+
+    Parameters
+    ----------
+    levels : list of arrays
+        Unique labels for each level
+    codes : list of arrays
+        Integers for each level designating which label at each location
+    names : list of str, optional
+        Names for each of the index levels
+    sortorder : int, optional
+        Level of sortedness (must be lexicographically sorted by that level)
+    verify_integrity : bool, default True
+        Check that the levels/codes are consistent and valid
+
+    Attributes
+    ----------
+    levels : list
+        The levels of the MultiIndex
+    codes : list
+        The integer codes for each level
+    names : tuple
+        The names of each level
+
+    Examples
+    --------
+    >>> import polarpandas as ppd
+    >>> arrays = [['bar', 'bar', 'baz', 'baz'], ['one', 'two', 'one', 'two']]
+    >>> idx = ppd.MultiIndex.from_arrays(arrays, names=['first', 'second'])
+    >>> df = ppd.DataFrame({'A': [1, 2, 3, 4]}, index=idx)
+
+    See Also
+    --------
+    Index : Basic Index class
+    DataFrame : Two-dimensional data structure with MultiIndex support
+
+    Notes
+    -----
+    - MultiIndex values are stored as tuples for compatibility with DataFrame
+    - Levels and codes are maintained internally for efficient level operations
+    - MultiIndex is immutable (cannot be modified after creation)
+    """
+
+    def __init__(
+        self,
+        levels: Optional[List[List[Any]]] = None,
+        codes: Optional[List[List[int]]] = None,
+        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+        sortorder: Optional[int] = None,
+        verify_integrity: bool = True,
+        **kwargs: Any,
+    ):
+        """
+        Initialize a MultiIndex from levels and codes.
+
+        Parameters
+        ----------
+        levels : list of arrays, optional
+            Unique labels for each level
+        codes : list of arrays, optional
+            Integers for each level designating which label at each location
+        names : list of str, optional
+            Names for each of the index levels
+        sortorder : int, optional
+            Level of sortedness
+        verify_integrity : bool, default True
+            Check that the levels/codes are consistent and valid
+        """
+        # If levels and codes are provided, use them
+        if levels is not None and codes is not None:
+            if verify_integrity:
+                self._verify_integrity(levels, codes)
+
+            self._levels = [list(level) for level in levels]
+            self._codes = [list(code) for code in codes]
+            self._names = (
+                tuple(names) if names is not None else tuple(None for _ in levels)
+            )
+            self._sortorder = sortorder
+
+            # Build tuple representation for compatibility
+            tuple_values = self._build_tuples_from_levels_codes()
+            # Convert tuples to strings for Polars Series (handles mixed types)
+            tuple_strs = [str(t) for t in tuple_values]
+            super().__init__(tuple_strs)
+        else:
+            # Initialize empty MultiIndex
+            self._levels = []
+            self._codes = []
+            self._names = ()
+            self._sortorder = None
+            super().__init__([])
+
+    def _verify_integrity(
+        self, levels: List[List[Any]], codes: List[List[int]]
+    ) -> None:
+        """Verify that levels and codes are consistent."""
+        if len(levels) != len(codes):
+            raise ValueError("levels and codes must have the same length")
+
+        n_levels = len(levels)
+        if n_levels == 0:
+            raise ValueError("Must pass non-zero number of levels/codes")
+
+        # Check all codes have same length
+        code_lengths = [len(code) for code in codes]
+        if len(set(code_lengths)) > 1:
+            raise ValueError("All codes must have the same length")
+
+        # Check codes are valid indices into levels
+        for i, (level, code) in enumerate(zip(levels, codes)):
+            max_code = max(code) if code else -1
+            if max_code >= len(level):
+                raise ValueError(
+                    f"Code {max_code} in level {i} is out of bounds for level with {len(level)} labels"
+                )
+            min_code = min(code) if code else 0
+            if min_code < -1:
+                raise ValueError(
+                    f"Code {min_code} in level {i} is invalid (must be >= -1)"
+                )
+
+    def _build_tuples_from_levels_codes(self) -> List[Tuple[Any, ...]]:
+        """Build tuple representation from levels and codes."""
+        if not self._levels or not self._codes:
+            return []
+
+        n_items = len(self._codes[0]) if self._codes else 0
+        tuples = []
+        for i in range(n_items):
+            tuple_val = tuple(
+                self._levels[level_idx][code[i]] if code[i] >= 0 else None
+                for level_idx, code in enumerate(self._codes)
+            )
+            tuples.append(tuple_val)
+        return tuples
+
+    def _build_levels_codes_from_tuples(
+        self, tuples: List[Tuple[Any, ...]]
+    ) -> Tuple[List[List[Any]], List[List[int]]]:
+        """Build levels and codes from tuple representation."""
+        if not tuples:
+            return [], []
+
+        n_levels = len(tuples[0])
+        levels: List[List[Any]] = [[] for _ in range(n_levels)]
+        codes: List[List[int]] = [[] for _ in range(n_levels)]
+
+        # Build level to code mapping for each level
+        level_to_code: List[Dict[Any, int]] = [{} for _ in range(n_levels)]
+
+        for tuple_val in tuples:
+            for level_idx, value in enumerate(tuple_val):
+                if value not in level_to_code[level_idx]:
+                    # Add new value to level
+                    code = len(levels[level_idx])
+                    level_to_code[level_idx][value] = code
+                    levels[level_idx].append(value)
+                    codes[level_idx].append(code)
+                else:
+                    # Use existing code
+                    code = level_to_code[level_idx][value]
+                    codes[level_idx].append(code)
+
+        return levels, codes
+
+    @property
+    def levels(self) -> List[List[Any]]:
+        """Return the levels of the MultiIndex."""
+        return self._levels
+
+    @property
+    def codes(self) -> List[List[int]]:
+        """Return the codes of the MultiIndex."""
+        return self._codes
+
+    @property
+    def names(self) -> Tuple[Optional[str], ...]:
+        """Return the names of the MultiIndex levels."""
+        return self._names
+
+    @property
+    def nlevels(self) -> int:
+        """Return the number of levels."""
+        return len(self._levels)
+
+    def __repr__(self) -> str:
+        """Return string representation of the MultiIndex."""
+        if len(self._levels) == 0:
+            return "MultiIndex([], names=[])"
+
+        # Build representation similar to pandas
+        lines = []
+        lines.append(f"MultiIndex(levels={self._levels},")
+        lines.append(f"           codes={self._codes},")
+        lines.append(f"           names={self._names})")
+        return "\n".join(lines)
+
+    def __str__(self) -> str:
+        """Return string representation of the MultiIndex."""
+        return self.__repr__()
+
+    def __len__(self) -> int:
+        """Return the length of the MultiIndex."""
+        if self._codes:
+            return len(self._codes[0])
+        return 0
+
+    def __iter__(self) -> Iterator[Tuple[Any, ...]]:
+        """Return an iterator over the MultiIndex tuples."""
+        return iter(self.tolist())
+
+    def tolist(self) -> List[Tuple[Any, ...]]:
+        """Return the MultiIndex values as a list of tuples."""
+        return self._build_tuples_from_levels_codes()
+
+    @classmethod
+    def from_arrays(
+        cls,
+        arrays: List[List[Any]],
+        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+        sortorder: Optional[int] = None,
+    ) -> "MultiIndex":
+        """
+        Create a MultiIndex from arrays.
+
+        Parameters
+        ----------
+        arrays : list of arrays
+            Each array will become a level in the MultiIndex
+        names : list of str, optional
+            Names for each of the index levels
+        sortorder : int, optional
+            Level of sortedness
+
+        Returns
+        -------
+        MultiIndex
+            A new MultiIndex object
+
+        Examples
+        --------
+        >>> arrays = [['bar', 'bar', 'baz', 'baz'], ['one', 'two', 'one', 'two']]
+        >>> idx = MultiIndex.from_arrays(arrays, names=['first', 'second'])
+        """
+        if not arrays:
+            raise ValueError("Must pass non-zero number of arrays")
+
+        # Check all arrays have same length
+        lengths = [len(arr) for arr in arrays]
+        if len(set(lengths)) > 1:
+            raise ValueError("All arrays must have the same length")
+
+        # Build levels and codes
+        levels: List[List[Any]] = []
+        codes: List[List[int]] = []
+
+        for arr in arrays:
+            # Get unique values in order of first appearance
+            unique_values = []
+            value_to_code: Dict[Any, int] = {}
+            level_codes = []
+
+            for value in arr:
+                if value not in value_to_code:
+                    code = len(unique_values)
+                    value_to_code[value] = code
+                    unique_values.append(value)
+                    level_codes.append(code)
+                else:
+                    level_codes.append(value_to_code[value])
+
+            levels.append(unique_values)
+            codes.append(level_codes)
+
+        return cls(levels=levels, codes=codes, names=names, sortorder=sortorder)
+
+    @classmethod
+    def from_tuples(
+        cls,
+        tuples: List[Tuple[Any, ...]],
+        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+        sortorder: Optional[int] = None,
+    ) -> "MultiIndex":
+        """
+        Create a MultiIndex from a list of tuples.
+
+        Parameters
+        ----------
+        tuples : list of tuples
+            Each tuple will become a row in the MultiIndex
+        names : list of str, optional
+            Names for each of the index levels
+        sortorder : int, optional
+            Level of sortedness
+
+        Returns
+        -------
+        MultiIndex
+            A new MultiIndex object
+
+        Examples
+        --------
+        >>> tuples = [('bar', 'one'), ('bar', 'two'), ('baz', 'one'), ('baz', 'two')]
+        >>> idx = MultiIndex.from_tuples(tuples, names=['first', 'second'])
+        """
+        if not tuples:
+            return cls(levels=[], codes=[], names=names or [])
+
+        # Check all tuples have same length
+        lengths = [len(t) for t in tuples]
+        if len(set(lengths)) > 1:
+            raise ValueError("All tuples must have the same length")
+
+        # Build levels and codes from tuples
+        instance = cls()
+        levels, codes = instance._build_levels_codes_from_tuples(tuples)
+        return cls(levels=levels, codes=codes, names=names, sortorder=sortorder)
+
+    @classmethod
+    def from_product(
+        cls,
+        iterables: List[List[Any]],
+        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+        sortorder: Optional[int] = None,
+    ) -> "MultiIndex":
+        """
+        Create a MultiIndex from the Cartesian product of iterables.
+
+        Parameters
+        ----------
+        iterables : list of iterables
+            Each iterable will be used to create a level
+        names : list of str, optional
+            Names for each of the index levels
+        sortorder : int, optional
+            Level of sortedness
+
+        Returns
+        -------
+        MultiIndex
+            A new MultiIndex object
+
+        Examples
+        --------
+        >>> iterables = [['bar', 'baz'], ['one', 'two']]
+        >>> idx = MultiIndex.from_product(iterables, names=['first', 'second'])
+        """
+        import itertools
+
+        if not iterables:
+            return cls(levels=[], codes=[], names=names or [])
+
+        # Generate Cartesian product
+        product = list(itertools.product(*iterables))
+
+        # Build from tuples
+        return cls.from_tuples(product, names=names, sortorder=sortorder)
+
+    @classmethod
+    def from_frame(
+        cls,
+        df: "DataFrame",
+        names: Optional[Union[List[str], Tuple[str, ...]]] = None,
+    ) -> "MultiIndex":
+        """
+        Create a MultiIndex from a DataFrame.
+
+        Parameters
+        ----------
+        df : DataFrame
+            DataFrame to create MultiIndex from (uses all columns)
+        names : list of str, optional
+            Names for each of the index levels (defaults to column names)
+
+        Returns
+        -------
+        MultiIndex
+            A new MultiIndex object
+
+        Examples
+        --------
+        >>> df = ppd.DataFrame({'A': ['bar', 'baz'], 'B': ['one', 'two']})
+        >>> idx = MultiIndex.from_frame(df, names=['first', 'second'])
+        """
+        from polarpandas.frame import DataFrame
+
+        if not isinstance(df, DataFrame):
+            raise TypeError("df must be a DataFrame")
+
+        if len(df) == 0:
+            return cls(levels=[], codes=[], names=names or [])
+
+        # Extract arrays from DataFrame columns
+        arrays = [df[col].to_list() for col in df.columns]
+
+        # Use column names if names not provided
+        if names is None:
+            names = list(df.columns)
+
+        return cls.from_arrays(arrays, names=names)
+
+    def get_level_values(self, level: Union[int, str]) -> Index:
+        """
+        Return vector of label values for requested level.
+
+        Parameters
+        ----------
+        level : int or str
+            Level number or name
+
+        Returns
+        -------
+        Index
+            Values for the requested level
+
+        Examples
+        --------
+        >>> idx = MultiIndex.from_arrays([['bar', 'bar', 'baz'], ['one', 'two', 'one']])
+        >>> idx.get_level_values(0)
+        Index(['bar', 'bar', 'baz'])
+        """
+        level_num = self.get_level_number(level)
+        if level_num < 0 or level_num >= len(self._levels):
+            raise IndexError(f"Level {level} out of bounds")
+
+        # Extract values for this level
+        level_values = [
+            self._levels[level_num][code] if code >= 0 else None
+            for code in self._codes[level_num]
+        ]
+        return Index(level_values)
+
+    def get_level_number(self, level: Union[int, str]) -> int:
+        """
+        Convert level name to level number.
+
+        Parameters
+        ----------
+        level : int or str
+            Level number or name
+
+        Returns
+        -------
+        int
+            Level number
+
+        Raises
+        ------
+        KeyError
+            If level name not found
+        """
+        if isinstance(level, int):
+            if level < 0:
+                level = len(self._levels) + level
+            if level < 0 or level >= len(self._levels):
+                raise IndexError(f"Level {level} out of bounds")
+            return level
+        elif isinstance(level, str):
+            try:
+                return self._names.index(level)
+            except ValueError:
+                raise KeyError(
+                    f"Level name '{level}' not found in names {self._names}"
+                ) from None
+        else:
+            raise TypeError(f"Level must be int or str, got {type(level)}")
+
+    def droplevel(
+        self, level: Union[int, str, List[Union[int, str]]], **kwargs: Any
+    ) -> Union["MultiIndex", Index]:
+        """
+        Return MultiIndex with requested level(s) removed.
+
+        Parameters
+        ----------
+        level : int, str, or list
+            Level(s) to drop
+
+        Returns
+        -------
+        MultiIndex or Index
+            MultiIndex with level(s) removed, or Index if only one level remains
+
+        Examples
+        --------
+        >>> idx = MultiIndex.from_arrays([['bar', 'baz'], ['one', 'two']])
+        >>> idx.droplevel(0)
+        Index(['one', 'two'])
+        """
+        levels_to_drop = [level] if isinstance(level, (int, str)) else list(level)
+
+        # Convert level names to numbers
+        level_nums = [self.get_level_number(lvl) for lvl in levels_to_drop]
+        level_nums = sorted(
+            set(level_nums), reverse=True
+        )  # Sort descending for safe removal
+
+        # Build new levels and codes
+        new_levels = [
+            self._levels[i] for i in range(len(self._levels)) if i not in level_nums
+        ]
+        new_codes = [
+            self._codes[i] for i in range(len(self._codes)) if i not in level_nums
+        ]
+        new_names = tuple(
+            self._names[i] for i in range(len(self._names)) if i not in level_nums
+        )
+
+        # If only one level remains, return Index
+        if len(new_levels) == 1:
+            level_values = [
+                new_levels[0][code] if code >= 0 else None for code in new_codes[0]
+            ]
+            result_index = Index(level_values)
+            # Preserve the name of the remaining level
+            if new_names and new_names[0] is not None:
+                result_index._series = result_index._series.rename(new_names[0])
+            return result_index
+
+        return MultiIndex(levels=new_levels, codes=new_codes, names=new_names)
+
+    def swaplevel(
+        self, i: Union[int, str] = -2, j: Union[int, str] = -1
+    ) -> "MultiIndex":
+        """
+        Swap levels i and j in a MultiIndex.
+
+        Parameters
+        ----------
+        i : int or str, default -2
+            First level to swap
+        j : int or str, default -1
+            Second level to swap
+
+        Returns
+        -------
+        MultiIndex
+            New MultiIndex with levels swapped
+
+        Examples
+        --------
+        >>> idx = MultiIndex.from_arrays([['bar', 'baz'], ['one', 'two']])
+        >>> idx.swaplevel(0, 1)
+        """
+        i_num = self.get_level_number(i)
+        j_num = self.get_level_number(j)
+
+        if i_num == j_num:
+            return self.copy()
+
+        # Create new levels and codes with swapped positions
+        new_levels = [list(level) for level in self._levels]
+        new_codes = [list(code) for code in self._codes]
+        new_names = list(self._names)
+
+        # Swap
+        new_levels[i_num], new_levels[j_num] = new_levels[j_num], new_levels[i_num]
+        new_codes[i_num], new_codes[j_num] = new_codes[j_num], new_codes[i_num]
+        new_names[i_num], new_names[j_num] = new_names[j_num], new_names[i_num]
+
+        return MultiIndex(levels=new_levels, codes=new_codes, names=tuple(new_names))
+
+    def reorder_levels(self, order: List[Union[int, str]]) -> "MultiIndex":
+        """
+        Rearrange levels using input order.
+
+        Parameters
+        ----------
+        order : list of int or str
+            List representing new level order
+
+        Returns
+        -------
+        MultiIndex
+            New MultiIndex with reordered levels
+
+        Examples
+        --------
+        >>> idx = MultiIndex.from_arrays([['bar', 'baz'], ['one', 'two']])
+        >>> idx.reorder_levels([1, 0])
+        """
+        if len(order) != len(self._levels):
+            raise ValueError(
+                f"Length of order must match number of levels ({len(self._levels)})"
+            )
+
+        # Convert level names to numbers
+        level_nums = [self.get_level_number(lvl) for lvl in order]
+
+        # Check all levels are represented
+        if set(level_nums) != set(range(len(self._levels))):
+            raise ValueError("order must contain all level numbers/names exactly once")
+
+        # Reorder
+        new_levels = [self._levels[i] for i in level_nums]
+        new_codes = [self._codes[i] for i in level_nums]
+        new_names = tuple(self._names[i] for i in level_nums)
+
+        return MultiIndex(levels=new_levels, codes=new_codes, names=new_names)
+
+    def remove_unused_levels(self) -> "MultiIndex":
+        """
+        Create new MultiIndex from current that removes unused levels.
+
+        Returns
+        -------
+        MultiIndex
+            New MultiIndex with unused levels removed
+        """
+        new_levels = []
+        new_codes = []
+
+        for _level_idx, (level, code) in enumerate(zip(self._levels, self._codes)):
+            # Find which codes are actually used
+            used_codes = set(code)
+            used_codes.discard(-1)  # Remove -1 (missing value code)
+
+            if not used_codes:
+                # No codes used, skip this level
+                continue
+
+            # Build new level with only used values
+            new_level = [level[c] for c in sorted(used_codes)]
+            # Create mapping from old code to new code
+            old_to_new = {
+                old_code: new_code
+                for new_code, old_code in enumerate(sorted(used_codes))
+            }
+            # Build new codes
+            new_code = [old_to_new.get(c, -1) if c >= 0 else -1 for c in code]
+
+            new_levels.append(new_level)
+            new_codes.append(new_code)
+
+        # Update names to match
+        new_names = tuple(
+            self._names[i] for i in range(len(self._levels)) if i < len(new_levels)
+        )
+
+        if len(new_levels) == 0:
+            return MultiIndex(levels=[], codes=[], names=[])
+
+        return MultiIndex(levels=new_levels, codes=new_codes, names=new_names)
+
+    def set_names(
+        self,
+        names: Union[str, List[str], Tuple[str, ...]],
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
+        inplace: bool = False,
+        **kwargs: Any,
+    ) -> Optional["MultiIndex"]:
+        """
+        Set names of index levels.
+
+        Parameters
+        ----------
+        names : str, list, or tuple
+            New names for levels
+        level : int, str, or list, optional
+            Level(s) to set names for. If None, sets all levels.
+        inplace : bool, default False
+            If True, modify in place
+
+        Returns
+        -------
+        MultiIndex or None
+            New MultiIndex with updated names, or None if inplace=True
+        """
+        if inplace:
+            raise ValueError("MultiIndex is immutable, cannot modify in place")
+
+        new_names = list(self._names)
+
+        if level is None:
+            # Set all names
+            if isinstance(names, str):
+                raise ValueError("Must provide list of names when level is None")
+            if len(names) != len(self._levels):
+                raise ValueError(
+                    f"Length of names must match number of levels ({len(self._levels)})"
+                )
+            new_names = list(names)
+        else:
+            # Set specific level(s)
+            levels_to_set = [level] if isinstance(level, (int, str)) else list(level)
+
+            if isinstance(names, str):
+                if len(levels_to_set) != 1:
+                    raise ValueError(
+                        "Must provide list of names when setting multiple levels"
+                    )
+                names_list = [names]
+            else:
+                if len(names) != len(levels_to_set):
+                    raise ValueError(
+                        f"Length of names must match number of levels to set ({len(levels_to_set)})"
+                    )
+                names_list = list(names)
+
+            for lvl, name in zip(levels_to_set, names_list):
+                level_num = self.get_level_number(lvl)
+                new_names[level_num] = name
+
+        return MultiIndex(
+            levels=self._levels, codes=self._codes, names=tuple(new_names)
+        )
+
+    def get_loc(
+        self, key: Any, method: Optional[str] = None, tolerance: Optional[Any] = None
+    ) -> Union[int, slice, List[int]]:
+        """
+        Get location for label or tuple of labels.
+
+        Parameters
+        ----------
+        key : scalar or tuple
+            Label or tuple of labels to find
+        method : str, optional
+            Method for finding location
+        tolerance : Any, optional
+            Tolerance for approximate matching
+
+        Returns
+        -------
+        int, slice, or list of int
+            Location(s) of the key
+
+        Examples
+        --------
+        >>> idx = MultiIndex.from_arrays([['bar', 'bar', 'baz'], ['one', 'two', 'one']])
+        >>> idx.get_loc(('bar', 'one'))
+        0
+        """
+        tuples = self.tolist()
+
+        if isinstance(key, tuple):
+            # Handle tuple keys - can be exact match or partial with slices
+            # Check if tuple contains slices
+            has_slice = any(isinstance(k, slice) for k in key)
+
+            if has_slice:
+                # Partial tuple with slice - find all matching tuples
+                matches = []
+                for i, tup in enumerate(tuples):
+                    match = True
+                    for level_idx, k in enumerate(key):
+                        if isinstance(k, slice):
+                            # Slice matches anything at this level
+                            continue
+                        elif level_idx < len(tup) and tup[level_idx] == k:
+                            # Exact match at this level
+                            continue
+                        else:
+                            # No match
+                            match = False
+                            break
+                    if match:
+                        matches.append(i)
+
+                if not matches:
+                    raise KeyError(f"{key} not in index")
+                if len(matches) == 1:
+                    return matches[0]
+                return matches
+            else:
+                # Exact tuple match
+                try:
+                    return tuples.index(key)
+                except ValueError:
+                    raise KeyError(f"{key} not in index") from None
+        else:
+            # Partial match - find all tuples starting with key
+            matches = [i for i, t in enumerate(tuples) if len(t) > 0 and t[0] == key]
+            if not matches:
+                raise KeyError(f"{key} not in index")
+            if len(matches) == 1:
+                return matches[0]
+            return matches
+
+    def sortlevel(
+        self,
+        level: Optional[Union[int, str, List[Union[int, str]]]] = None,
+        ascending: bool = True,
+        sort_remaining: bool = True,
+        **kwargs: Any,
+    ) -> Tuple["MultiIndex", List[int]]:
+        """
+        Sort MultiIndex by the requested level(s).
+
+        Parameters
+        ----------
+        level : int, str, or list, optional
+            Level(s) to sort by. If None, sorts by all levels.
+        ascending : bool, default True
+            Sort ascending or descending
+        sort_remaining : bool, default True
+            Also sort by remaining levels
+
+        Returns
+        -------
+        tuple of (MultiIndex, list of int)
+            Sorted MultiIndex and indexer
+        """
+        tuples = self.tolist()
+
+        if level is None:
+            # Sort by all levels
+            sorted_tuples_with_idx = sorted(
+                enumerate(tuples), key=lambda x: x[1], reverse=not ascending
+            )
+        else:
+            # Sort by specific level(s)
+            levels_to_sort = [level] if isinstance(level, (int, str)) else list(level)
+
+            level_nums = [self.get_level_number(lvl) for lvl in levels_to_sort]
+
+            def sort_key(x: Tuple[int, Tuple[Any, ...]]) -> Tuple[Any, ...]:
+                idx, tup = x
+                if sort_remaining:
+                    # Sort by specified levels, then remaining
+                    key_parts = [
+                        tup[i] if i in level_nums else None for i in range(len(tup))
+                    ]
+                    remaining = [tup[i] for i in range(len(tup)) if i not in level_nums]
+                    return tuple(key_parts + remaining)
+                else:
+                    # Sort only by specified levels
+                    return tuple(
+                        tup[i] if i in level_nums else None for i in range(len(tup))
+                    )
+
+            sorted_tuples_with_idx = sorted(
+                enumerate(tuples), key=sort_key, reverse=not ascending
+            )
+
+        sorted_indices = [idx for idx, _ in sorted_tuples_with_idx]
+        sorted_tuples = [tup for _, tup in sorted_tuples_with_idx]
+
+        # Rebuild MultiIndex from sorted tuples
+        sorted_mi = MultiIndex.from_tuples(sorted_tuples, names=self._names)
+
+        return sorted_mi, sorted_indices
+
+    def to_flat_index(self) -> Index:
+        """
+        Convert MultiIndex to flat Index.
+
+        Returns
+        -------
+        Index
+            Flat Index with tuple values as strings
+        """
+        tuples = self.tolist()
+        # Convert tuples to strings for flat index
+        flat_values = [str(t) if isinstance(t, tuple) else t for t in tuples]
+        return Index(flat_values)
+
+    def copy(self, deep: bool = True, **kwargs: Any) -> "MultiIndex":
+        """Make a copy of the MultiIndex."""
+        return MultiIndex(
+            levels=[list(level) for level in self._levels],
+            codes=[list(code) for code in self._codes],
+            names=self._names,
+            sortorder=self._sortorder,
+            verify_integrity=False,
+        )
+
+    def equals(self, other: Any) -> bool:
+        """Check equality with another MultiIndex."""
+        if not isinstance(other, MultiIndex):
+            return False
+
+        if self.nlevels != other.nlevels:
+            return False
+
+        if self._names != other._names:
+            return False
+
+        # Check levels and codes match
+        for i in range(self.nlevels):
+            if self._levels[i] != other._levels[i]:
+                return False
+            if self._codes[i] != other._codes[i]:
+                return False
+
+        return True

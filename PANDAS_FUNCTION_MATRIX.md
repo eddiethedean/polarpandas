@@ -544,6 +544,28 @@ Total items cataloged: 73
 | `view` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `where` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
+## MultiIndex Methods
+
+Total items cataloged: 15
+
+| Item | 1.5.0 | 2.0.0 | 2.1.0 | 2.2.0 | 2.3.0 | PolarPandas |
+|------|-------|-------|-------|-------|-------|-------------|
+| `from_arrays` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `from_tuples` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `from_product` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `from_frame` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_level_values` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_level_number` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `droplevel` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `swaplevel` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `reorder_levels` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `remove_unused_levels` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `set_names` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_loc` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `sortlevel` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `to_flat_index` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `nlevels` (property) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
 ## String Accessor Methods (.str)
 
 Total items cataloged: 57
@@ -630,12 +652,12 @@ Total items cataloged: 13
 
 ## Summary Statistics
 
-- **pandas 1.5.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 57 .str methods, 13 .dt methods (total: 569 items)
-- **pandas 2.0.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 57 .str methods, 13 .dt methods (total: 569 items)
-- **pandas 2.1.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 57 .str methods, 13 .dt methods (total: 569 items)
-- **pandas 2.2.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 57 .str methods, 13 .dt methods (total: 569 items)
-- **pandas 2.3.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 57 .str methods, 13 .dt methods (total: 569 items)
-- **PolarPandas**: 69 functions, 206 DataFrame methods, 186 Series methods, 73 Index methods, 57 .str methods, 28 .dt methods (total: 619 items)
+- **pandas 1.5.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 15 MultiIndex methods, 57 .str methods, 13 .dt methods (total: 584 items)
+- **pandas 2.0.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 15 MultiIndex methods, 57 .str methods, 13 .dt methods (total: 584 items)
+- **pandas 2.1.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 15 MultiIndex methods, 57 .str methods, 13 .dt methods (total: 584 items)
+- **pandas 2.2.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 15 MultiIndex methods, 57 .str methods, 13 .dt methods (total: 584 items)
+- **pandas 2.3.0**: 62 functions, 185 DataFrame methods, 179 Series methods, 73 Index methods, 15 MultiIndex methods, 57 .str methods, 13 .dt methods (total: 584 items)
+- **PolarPandas**: 69 functions, 206 DataFrame methods, 186 Series methods, 73 Index methods, 15 MultiIndex methods, 57 .str methods, 28 .dt methods (total: 634 items)
 
 **All polarpandas features are available to everyone** - there is no version gating or compatibility restrictions.
 This provides comprehensive pandas compatibility across all supported versions!

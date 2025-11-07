@@ -12,10 +12,7 @@ from typing import (
     Dict,
     Iterator,
     List,
-    Literal,
-    Optional,
     Tuple,
-    Union,
 )
 
 import polars as pl
@@ -81,9 +78,9 @@ class Series:
 
     def __init__(
         self,
-        data: Optional[Union[List[Any], pl.Series]] = None,
-        name: Optional[str] = None,
-        index: Optional[Any] = None,
+        data: Any = None,
+        name: Any = None,
+        index: Any = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -133,22 +130,38 @@ class Series:
         self._index_name = None
         self._original_name = None  # Store original name type for restoration
 
+        # Handle tuple names (for MultiIndex compatibility)
+        # Polars requires string names, but pandas allows tuples
+        polars_name = name
+        if isinstance(name, tuple):
+            self._original_name = name
+            # Convert tuple to string for Polars
+            polars_name = (
+                str(name) if len(name) > 1 else (name[0] if len(name) == 1 else None)
+            )
+        elif name is not None:
+            self._original_name = name
+
         if data is None:
-            self._series = pl.Series(name=name or "", values=[])
+            self._series = pl.Series(name=polars_name or "", values=[])
         elif isinstance(data, pl.Series):
             self._series = data
+            # Update name if provided
+            if polars_name is not None:
+                self._series = self._series.rename(polars_name)
         else:
             # Handle list or other array-like data
             # Pass through kwargs to pl.Series constructor
-            self._series = pl.Series(name or "", data, **kwargs)
+            # Note: pl.Series(name=..., values=...) - name must be keyword, data goes in values
+            self._series = pl.Series(values=data, name=polars_name or "", **kwargs)
 
     @property
-    def name(self) -> Optional[str]:
+    def name(self) -> Any:
         """Get the name of the Series."""
         return self._series.name
 
     @name.setter
-    def name(self, value: Optional[str]) -> None:
+    def name(self, value: Any) -> None:
         """Set the name of the Series."""
         if value is not None:
             self._series = self._series.rename(value)
@@ -186,6 +199,35 @@ class Series:
         """Return string representation of the Series."""
         return str(self._series)
 
+    def __getitem__(self, key: Any) -> Any:
+        """
+        Access Series values by position or label.
+
+        Parameters
+        ----------
+        key : int, str, slice, or array-like
+            Position or label to access
+
+        Returns
+        -------
+        scalar or Series
+            Value(s) at the specified position(s)
+        """
+        # Handle integer indexing
+        if isinstance(key, int):
+            return self._series[key]
+        # Handle string/label indexing if we have an index
+        elif isinstance(key, str) and self._index is not None:
+            try:
+                idx = self._index.index(key)
+                return self._series[idx]
+            except (ValueError, AttributeError):
+                # Fall back to Polars Series behavior
+                return self._series[key]
+        # Handle slicing and other cases
+        else:
+            return self._series[key]
+
     def __len__(self) -> int:
         """Return the length of the Series."""
         return len(self._series)
@@ -201,48 +243,48 @@ class Series:
         return len(self._series)
 
     # Arithmetic operations
-    def __add__(self, other: Union["Series", Any]) -> "Series":
+    def __add__(self, other: Any) -> "Series":
         """Add Series or scalar."""
         if isinstance(other, Series):
             return Series(self._series + other._series)
         return Series(self._series + other)
 
-    def __sub__(self, other: Union["Series", Any]) -> "Series":
+    def __sub__(self, other: Any) -> "Series":
         """Subtract Series or scalar."""
         if isinstance(other, Series):
             return Series(self._series - other._series)
         return Series(self._series - other)
 
-    def __mul__(self, other: Union["Series", Any]) -> "Series":
+    def __mul__(self, other: Any) -> "Series":
         """Multiply Series or scalar."""
         if isinstance(other, Series):
             return Series(self._series * other._series)
         return Series(self._series * other)
 
-    def __truediv__(self, other: Union["Series", Any]) -> "Series":
+    def __truediv__(self, other: Any) -> "Series":
         """Divide Series or scalar."""
         if isinstance(other, Series):
             return Series(self._series / other._series)
         return Series(self._series / other)
 
-    def __radd__(self, other: Union["Series", Any]) -> "Series":
+    def __radd__(self, other: Any) -> "Series":
         """Right add (for scalar + Series)."""
         return Series(other + self._series)  # type: ignore[arg-type]
 
-    def __rsub__(self, other: Union["Series", Any]) -> "Series":
+    def __rsub__(self, other: Any) -> "Series":
         """Right subtract (for scalar - Series)."""
         return Series(other - self._series)  # type: ignore[arg-type]
 
-    def __rmul__(self, other: Union["Series", Any]) -> "Series":
+    def __rmul__(self, other: Any) -> "Series":
         """Right multiply (for scalar * Series)."""
         return Series(other * self._series)  # type: ignore[arg-type]
 
-    def __rtruediv__(self, other: Union["Series", Any]) -> "Series":
+    def __rtruediv__(self, other: Any) -> "Series":
         """Right divide (for scalar / Series)."""
         return Series(other / self._series)  # type: ignore[arg-type]
 
     # Comparison operators
-    def __gt__(self, other: Union["Series", Any]) -> "Series":
+    def __gt__(self, other: Any) -> "Series":
         """Greater than comparison."""
         if isinstance(other, Series):
             result = Series(self._series > other._series)
@@ -252,7 +294,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __lt__(self, other: Union["Series", Any]) -> "Series":
+    def __lt__(self, other: Any) -> "Series":
         """Less than comparison."""
         if isinstance(other, Series):
             result = Series(self._series < other._series)
@@ -261,7 +303,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __ge__(self, other: Union["Series", Any]) -> "Series":
+    def __ge__(self, other: Any) -> "Series":
         """Greater than or equal comparison."""
         if isinstance(other, Series):
             result = Series(self._series >= other._series)
@@ -270,7 +312,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __le__(self, other: Union["Series", Any]) -> "Series":
+    def __le__(self, other: Any) -> "Series":
         """Less than or equal comparison."""
         if isinstance(other, Series):
             result = Series(self._series <= other._series)
@@ -279,7 +321,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __eq__(self, other: Union["Series", Any]) -> "Series":  # type: ignore[override]
+    def __eq__(self, other: Any) -> "Series":  # type: ignore[override]
         """Equal comparison."""
         if isinstance(other, Series):
             result = Series(self._series == other._series)
@@ -288,7 +330,7 @@ class Series:
         result._series = result._series.alias("")
         return result
 
-    def __ne__(self, other: Union["Series", Any]) -> "Series":  # type: ignore[override]
+    def __ne__(self, other: Any) -> "Series":  # type: ignore[override]
         """Not equal comparison."""
         if isinstance(other, Series):
             result = Series(self._series != other._series)
@@ -300,8 +342,8 @@ class Series:
     # Explicit arithmetic methods
     def add(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -337,8 +379,8 @@ class Series:
 
     def sub(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -374,8 +416,8 @@ class Series:
 
     def subtract(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -387,8 +429,8 @@ class Series:
 
     def mul(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -424,8 +466,8 @@ class Series:
 
     def multiply(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -437,8 +479,8 @@ class Series:
 
     def div(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -474,8 +516,8 @@ class Series:
 
     def divide(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -487,8 +529,8 @@ class Series:
 
     def mod(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -524,8 +566,8 @@ class Series:
 
     def pow(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -562,7 +604,7 @@ class Series:
     # Explicit comparison methods
     def eq(
         self,
-        other: Union["Series", Any],
+        other: Any,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -584,7 +626,7 @@ class Series:
 
     def ne(
         self,
-        other: Union["Series", Any],
+        other: Any,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -606,7 +648,7 @@ class Series:
 
     def gt(
         self,
-        other: Union["Series", Any],
+        other: Any,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -628,7 +670,7 @@ class Series:
 
     def lt(
         self,
-        other: Union["Series", Any],
+        other: Any,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -650,7 +692,7 @@ class Series:
 
     def ge(
         self,
-        other: Union["Series", Any],
+        other: Any,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -672,7 +714,7 @@ class Series:
 
     def le(
         self,
-        other: Union["Series", Any],
+        other: Any,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -720,7 +762,7 @@ class Series:
         """
         return Series(self._series.map_elements(func, return_dtype=pl.Float64))
 
-    def map(self, arg: Union[Dict[Any, Any], Callable[..., Any], "Series"]) -> "Series":
+    def map(self, arg: Any) -> "Series":
         """
         Map values using a dictionary or function.
 
@@ -767,7 +809,7 @@ class Series:
         self,
         left: Any,
         right: Any,
-        inclusive: Literal["both", "neither", "left", "right"] = "both",
+        inclusive: str = "both",
     ) -> "Series":
         """
         Check if values are between bounds.
@@ -790,6 +832,12 @@ class Series:
         if len(self._series) == 0:
             return Series(pl.Series([], dtype=pl.Boolean))
 
+        # Validate inclusive parameter
+        if inclusive not in ("both", "neither", "left", "right"):
+            raise ValueError(
+                f"inclusive must be one of {{'both', 'neither', 'left', 'right'}}, got '{inclusive}'"
+            )
+
         # Polars handles nulls natively - no pandas fallback needed
 
         if inclusive == "both":
@@ -805,9 +853,7 @@ class Series:
                 "inclusive must be one of 'both', 'neither', 'left', 'right'"
             )
 
-    def clip(
-        self, lower: Optional[Any] = None, upper: Optional[Any] = None
-    ) -> "Series":
+    def clip(self, lower: Any = None, upper: Any = None) -> "Series":
         """
         Trim values at thresholds.
 
@@ -985,7 +1031,7 @@ class Series:
         """
         return self._series.var(ddof=ddof)
 
-    def count(self, level: Optional[Any] = None, **kwargs: Any) -> int:
+    def count(self, level: Any = None, **kwargs: Any) -> int:
         """
         Return number of non-null values in the Series.
 
@@ -1071,10 +1117,10 @@ class Series:
         to_replace: Any = None,
         value: Any = None,
         inplace: bool = False,
-        limit: Optional[int] = None,
+        limit: Any = None,
         regex: bool = False,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Replace values given in to_replace with value.
 
@@ -1128,8 +1174,8 @@ class Series:
     def shift(
         self,
         periods: int = 1,
-        freq: Optional[Any] = None,
-        fill_value: Optional[Any] = None,
+        freq: Any = None,
+        fill_value: Any = None,
     ) -> "Series":
         """
         Shift index by desired number of periods with an optional time freq.
@@ -1173,9 +1219,9 @@ class Series:
     def pct_change(
         self,
         periods: int = 1,
-        fill_method: Optional[str] = None,
-        limit: Optional[int] = None,
-        freq: Optional[Any] = None,
+        fill_method: Any = None,
+        limit: Any = None,
+        freq: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -1204,9 +1250,7 @@ class Series:
         result_series = (self._series - shifted) / shifted
         return Series(result_series, index=self._index)
 
-    def cumsum(
-        self, skipna: bool = True, axis: Optional[int] = None, **kwargs: Any
-    ) -> "Series":
+    def cumsum(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> "Series":
         """
         Return cumulative sum over a Series.
 
@@ -1227,9 +1271,7 @@ class Series:
         result_series = self._series.cum_sum()
         return Series(result_series, index=self._index)
 
-    def cummax(
-        self, skipna: bool = True, axis: Optional[int] = None, **kwargs: Any
-    ) -> "Series":
+    def cummax(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> "Series":
         """
         Return cumulative maximum over a Series.
 
@@ -1250,9 +1292,7 @@ class Series:
         result_series = self._series.cum_max()
         return Series(result_series, index=self._index)
 
-    def cummin(
-        self, skipna: bool = True, axis: Optional[int] = None, **kwargs: Any
-    ) -> "Series":
+    def cummin(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> "Series":
         """
         Return cumulative minimum over a Series.
 
@@ -1273,9 +1313,7 @@ class Series:
         result_series = self._series.cum_min()
         return Series(result_series, index=self._index)
 
-    def cumprod(
-        self, skipna: bool = True, axis: Optional[int] = None, **kwargs: Any
-    ) -> "Series":
+    def cumprod(self, skipna: bool = True, axis: Any = None, **kwargs: Any) -> "Series":
         """
         Return cumulative product over a Series.
 
@@ -1298,8 +1336,8 @@ class Series:
 
     def all(
         self,
-        axis: Optional[int] = None,
-        bool_only: Optional[bool] = None,
+        axis: Any = None,
+        bool_only: Any = None,
         skipna: bool = True,
         **kwargs: Any,
     ) -> bool:
@@ -1338,8 +1376,8 @@ class Series:
 
     def any(
         self,
-        axis: Optional[int] = None,
-        bool_only: Optional[bool] = None,
+        axis: Any = None,
+        bool_only: Any = None,
         skipna: bool = True,
         **kwargs: Any,
     ) -> bool:
@@ -1376,9 +1414,7 @@ class Series:
                 return True
             return bool_series.any()
 
-    def idxmax(
-        self, axis: Optional[int] = None, skipna: bool = True, **kwargs: Any
-    ) -> Any:
+    def idxmax(self, axis: Any = None, skipna: bool = True, **kwargs: Any) -> Any:
         """
         Return the row label of the maximum value.
 
@@ -1420,9 +1456,7 @@ class Series:
             return self._index[max_idx]
         return max_idx
 
-    def idxmin(
-        self, axis: Optional[int] = None, skipna: bool = True, **kwargs: Any
-    ) -> Any:
+    def idxmin(self, axis: Any = None, skipna: bool = True, **kwargs: Any) -> Any:
         """
         Return the row label of the minimum value.
 
@@ -1487,13 +1521,13 @@ class Series:
         self,
         ascending: bool = True,
         inplace: bool = False,
-        kind: Optional[str] = None,
+        kind: Any = None,
         na_position: str = "last",
         sort_remaining: bool = True,
         ignore_index: bool = False,
-        key: Optional[Callable] = None,
+        key: Any = None,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Sort Series by index values.
 
@@ -1609,14 +1643,14 @@ class Series:
 
     def fillna(
         self,
-        value: Optional[Any] = None,
-        method: Optional[str] = None,
-        axis: Optional[int] = None,
+        value: Any = None,
+        method: Any = None,
+        axis: Any = None,
         inplace: bool = False,
-        limit: Optional[int] = None,
-        downcast: Optional[Any] = None,
+        limit: Any = None,
+        downcast: Any = None,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Fill missing values.
 
@@ -1662,12 +1696,12 @@ class Series:
 
     def dropna(
         self,
-        axis: Optional[int] = None,
+        axis: Any = None,
         inplace: bool = False,
-        how: Optional[str] = None,
-        thresh: Optional[int] = None,
+        how: Any = None,
+        thresh: Any = None,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Return a new Series with missing values removed.
 
@@ -1699,11 +1733,11 @@ class Series:
 
     def drop_duplicates(
         self,
-        keep: Union[str, bool] = "first",
+        keep: Any = "first",
         inplace: bool = False,
         ignore_index: bool = False,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Return Series with duplicate values removed.
 
@@ -1762,15 +1796,15 @@ class Series:
 
     def drop(
         self,
-        labels: Optional[Union[Any, List[Any]]] = None,
-        axis: Optional[int] = None,
-        index: Optional[Union[Any, List[Any]]] = None,
-        columns: Optional[Union[Any, List[Any]]] = None,
-        level: Optional[Any] = None,
+        labels: Any = None,
+        axis: Any = None,
+        index: Any = None,
+        columns: Any = None,
+        level: Any = None,
         inplace: bool = False,
         errors: str = "raise",
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Return Series with specified index labels removed.
 
@@ -1862,7 +1896,7 @@ class Series:
         else:
             return Series(result_series, index=new_index)
 
-    def duplicated(self, keep: Union[str, bool] = "first", **kwargs: Any) -> "Series":
+    def duplicated(self, keep: Any = "first", **kwargs: Any) -> "Series":
         """
         Indicate duplicate Series values.
 
@@ -1972,7 +2006,7 @@ class Series:
     def factorize(
         self,
         sort: bool = False,
-        na_sentinel: Optional[int] = -1,
+        na_sentinel: Any = -1,
         use_na_sentinel: bool = True,
         **kwargs: Any,
     ) -> Tuple[Any, Any]:
@@ -2022,10 +2056,10 @@ class Series:
 
     def filter(
         self,
-        items: Optional[List[Any]] = None,
-        like: Optional[str] = None,
-        regex: Optional[str] = None,
-        axis: Optional[int] = None,
+        items: Any = None,
+        like: Any = None,
+        regex: Any = None,
+        axis: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -2086,7 +2120,7 @@ class Series:
 
         return Series(result_series, index=new_index)
 
-    def first_valid_index(self) -> Optional[Any]:
+    def first_valid_index(self) -> Any:
         """
         Return index of first non-NA/null value.
 
@@ -2106,7 +2140,7 @@ class Series:
 
         return None
 
-    def last_valid_index(self) -> Optional[Any]:
+    def last_valid_index(self) -> Any:
         """
         Return index of last non-NA/null value.
 
@@ -2128,8 +2162,8 @@ class Series:
 
     def floordiv(
         self,
-        other: Union["Series", Any],
-        fill_value: Optional[Any] = None,
+        other: Any,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -2163,7 +2197,7 @@ class Series:
                 result_series = self._series // other
         return Series(result_series, index=self._index)
 
-    def get(self, key: Any, default: Optional[Any] = None) -> Any:
+    def get(self, key: Any, default: Any = None) -> Any:
         """
         Get item from object for given key.
 
@@ -2195,7 +2229,7 @@ class Series:
 
         return default
 
-    def isin(self, values: Union[List[Any], "Series", Any]) -> "Series":
+    def isin(self, values: Any) -> "Series":
         """
         Whether elements in Series are contained in values.
 
@@ -2221,9 +2255,9 @@ class Series:
 
     def describe(
         self,
-        percentiles: Optional[List[float]] = None,
-        include: Optional[Any] = None,
-        exclude: Optional[Any] = None,
+        percentiles: Any = None,
+        include: Any = None,
+        exclude: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -2270,11 +2304,11 @@ class Series:
 
     def quantile(
         self,
-        q: Union[float, List[float]] = 0.5,
+        q: Any = 0.5,
         interpolation: str = "linear",
-        numeric_only: Optional[bool] = None,
+        numeric_only: Any = None,
         **kwargs: Any,
-    ) -> Union[Any, "Series"]:
+    ) -> Any:
         """
         Return value at the given quantile.
 
@@ -2327,10 +2361,10 @@ class Series:
 
     def kurt(
         self,
-        axis: Optional[int] = None,
+        axis: Any = None,
         skipna: bool = True,
-        level: Optional[Any] = None,
-        numeric_only: Optional[bool] = None,
+        level: Any = None,
+        numeric_only: Any = None,
         **kwargs: Any,
     ) -> float:
         """
@@ -2360,10 +2394,10 @@ class Series:
 
     def kurtosis(
         self,
-        axis: Optional[int] = None,
+        axis: Any = None,
         skipna: bool = True,
-        level: Optional[Any] = None,
-        numeric_only: Optional[bool] = None,
+        level: Any = None,
+        numeric_only: Any = None,
         **kwargs: Any,
     ) -> float:
         """
@@ -2415,10 +2449,10 @@ class Series:
 
     def skew(
         self,
-        axis: Optional[int] = None,
+        axis: Any = None,
         skipna: bool = True,
-        level: Optional[Any] = None,
-        numeric_only: Optional[bool] = None,
+        level: Any = None,
+        numeric_only: Any = None,
         **kwargs: Any,
     ) -> float:
         """
@@ -2470,11 +2504,11 @@ class Series:
 
     def sem(
         self,
-        axis: Optional[int] = None,
+        axis: Any = None,
         skipna: bool = True,
-        level: Optional[Any] = None,
+        level: Any = None,
         ddof: int = 1,
-        numeric_only: Optional[bool] = None,
+        numeric_only: Any = None,
         **kwargs: Any,
     ) -> float:
         """
@@ -2538,10 +2572,10 @@ class Series:
 
     def info(
         self,
-        verbose: Optional[bool] = None,
-        buf: Optional[Any] = None,
-        max_cols: Optional[int] = None,
-        memory_usage: Optional[Union[bool, str]] = None,
+        verbose: Any = None,
+        buf: Any = None,
+        max_cols: Any = None,
+        memory_usage: Any = None,
         show_counts: bool = False,
         **kwargs: Any,
     ) -> None:
@@ -2589,11 +2623,11 @@ class Series:
 
     def ffill(
         self,
-        axis: Optional[int] = None,
-        limit: Optional[int] = None,
+        axis: Any = None,
+        limit: Any = None,
         inplace: bool = False,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Forward fill missing values.
 
@@ -2628,11 +2662,11 @@ class Series:
 
     def bfill(
         self,
-        axis: Optional[int] = None,
-        limit: Optional[int] = None,
+        axis: Any = None,
+        limit: Any = None,
         inplace: bool = False,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Backward fill missing values.
 
@@ -2667,11 +2701,11 @@ class Series:
 
     def pad(
         self,
-        axis: Optional[int] = None,
-        limit: Optional[int] = None,
+        axis: Any = None,
+        limit: Any = None,
         inplace: bool = False,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Alias for ffill() (pandas compatibility).
 
@@ -2693,9 +2727,7 @@ class Series:
         """
         return self.ffill(axis=axis, limit=limit, inplace=inplace, **kwargs)
 
-    def sort_values(
-        self, ascending: bool = True, inplace: bool = False
-    ) -> Optional["Series"]:
+    def sort_values(self, ascending: bool = True, inplace: bool = False) -> Any:
         """
         Sort by values.
 
@@ -2784,7 +2816,7 @@ class Series:
         """
         return self.to_list()
 
-    def to_frame(self, name: Optional[str] = None) -> "DataFrame":
+    def to_frame(self, name: Any = None) -> "DataFrame":
         """
         Convert Series to DataFrame.
 
@@ -2813,7 +2845,7 @@ class Series:
         normalize: bool = False,
         sort: bool = True,
         ascending: bool = False,
-        bins: Optional[int] = None,
+        bins: Any = None,
         dropna: bool = True,
     ) -> "Series":
         """
@@ -2893,9 +2925,9 @@ class Series:
 
     def to_numpy(
         self,
-        dtype: Optional[Any] = None,
+        dtype: Any = None,
         copy: bool = False,
-        na_value: Optional[Any] = None,
+        na_value: Any = None,
     ) -> Any:
         """
         Convert the Series to a NumPy array.
@@ -2942,34 +2974,34 @@ class Series:
                 mask = (
                     np.isnan(result.astype(float))
                     if result.dtype.kind in "biu"
-                    else (result == None)
-                )  # noqa: E711
+                    else (result is None)
+                )
                 result = np.where(mask, na_value, result)
 
         return result
 
     def to_csv(
         self,
-        path_or_buf: Optional[Union[str, Any]] = None,
+        path_or_buf: Any = None,
         sep: str = ",",
         na_rep: str = "",
-        float_format: Optional[str] = None,
-        columns: Optional[List[str]] = None,
-        header: Union[bool, List[str]] = True,
+        float_format: Any = None,
+        columns: Any = None,
+        header: Any = True,
         index: bool = True,
-        index_label: Optional[Union[str, List[str]]] = None,
+        index_label: Any = None,
         mode: str = "w",
-        encoding: Optional[str] = None,
-        compression: Optional[str] = None,
-        quoting: Optional[int] = None,
-        line_terminator: Optional[str] = None,
-        chunksize: Optional[int] = None,
-        date_format: Optional[str] = None,
+        encoding: Any = None,
+        compression: Any = None,
+        quoting: Any = None,
+        line_terminator: Any = None,
+        chunksize: Any = None,
+        date_format: Any = None,
         doublequote: bool = True,
-        escapechar: Optional[str] = None,
+        escapechar: Any = None,
         decimal: str = ".",
         **kwargs: Any,
-    ) -> Optional[str]:
+    ) -> Any:
         """
         Write Series to a comma-separated values (csv) file.
 
@@ -3036,9 +3068,9 @@ class Series:
 
     def to_dict(
         self,
-        into: Optional[Any] = None,
+        into: Any = None,
         **kwargs: Any,
-    ) -> Union[Dict[Any, Any], Any]:
+    ) -> Any:
         """
         Convert Series to dict.
 
@@ -3067,18 +3099,18 @@ class Series:
 
     def to_string(
         self,
-        buf: Optional[Any] = None,
+        buf: Any = None,
         na_rep: str = "NaN",
-        float_format: Optional[str] = None,
+        float_format: Any = None,
         header: bool = True,
         index: bool = True,
         length: bool = False,
         dtype: bool = False,
         name: bool = False,
-        max_rows: Optional[int] = None,
-        min_rows: Optional[int] = None,
+        max_rows: Any = None,
+        min_rows: Any = None,
         **kwargs: Any,
-    ) -> Optional[str]:
+    ) -> Any:
         """
         Render a string representation of the Series.
 
@@ -3169,14 +3201,14 @@ class Series:
 
     def rename(
         self,
-        index: Optional[Union[Any, Dict[Any, Any], Callable]] = None,
-        axis: Optional[Union[int, str]] = None,
+        index: Any = None,
+        axis: Any = None,
         copy: bool = True,
         inplace: bool = False,
-        level: Optional[Any] = None,
+        level: Any = None,
         errors: str = "ignore",
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """
         Alter Series index labels or name.
 
@@ -3242,13 +3274,13 @@ class Series:
 
     def reset_index(
         self,
-        level: Optional[Union[Any, List[Any]]] = None,
+        level: Any = None,
         drop: bool = False,
-        name: Optional[Any] = None,
+        name: Any = None,
         inplace: bool = False,
         allow_duplicates: bool = False,
         **kwargs: Any,
-    ) -> Optional[Union["Series", "DataFrame"]]:
+    ) -> Any:
         """
         Generate a new Series or DataFrame with the index reset.
 
@@ -3324,6 +3356,14 @@ class Series:
 
         # Convert Polars Series to pandas
         pandas_series = self._series.to_pandas()
+
+        # Restore original tuple name if it was stored (for MultiIndex compatibility)
+        if (
+            hasattr(self, "_original_name")
+            and self._original_name is not None
+            and isinstance(self._original_name, tuple)
+        ):
+            pandas_series.name = self._original_name
 
         # Set index if we have one
         if self._index is not None:
@@ -3427,7 +3467,7 @@ class Series:
         self,
         other: "Series",
         join: str = "outer",
-        axis: Optional[Any] = None,
+        axis: Any = None,
         **kwargs: Any,
     ) -> Tuple["Series", "Series"]:
         """
@@ -3473,9 +3513,7 @@ class Series:
             # No index alignment needed
             return self, other
 
-    def argmax(
-        self, axis: Optional[int] = None, skipna: bool = True, **kwargs: Any
-    ) -> int:
+    def argmax(self, axis: Any = None, skipna: bool = True, **kwargs: Any) -> int:
         """
         Return int position of the largest value in the Series.
 
@@ -3505,9 +3543,7 @@ class Series:
             indices = self._series.arg_max()
             return indices if indices is not None else -1
 
-    def argmin(
-        self, axis: Optional[int] = None, skipna: bool = True, **kwargs: Any
-    ) -> int:
+    def argmin(self, axis: Any = None, skipna: bool = True, **kwargs: Any) -> int:
         """
         Return int position of the smallest value in the Series.
 
@@ -3541,7 +3577,7 @@ class Series:
         self,
         axis: int = 0,
         kind: str = "quicksort",
-        order: Optional[Any] = None,
+        order: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -3573,7 +3609,7 @@ class Series:
         align_axis: int = 1,
         keep_shape: bool = False,
         keep_equal: bool = False,
-        result_names: Optional[Tuple[str, str]] = None,
+        result_names: Any = None,
     ) -> "DataFrame":
         """
         Compare to another Series and show the differences.
@@ -3636,7 +3672,7 @@ class Series:
         self,
         other: "Series",
         func: Callable[[Any, Any], Any],
-        fill_value: Optional[Any] = None,
+        fill_value: Any = None,
     ) -> "Series":
         """
         Combine the Series with another Series using a function.
@@ -3740,7 +3776,7 @@ class Series:
         self,
         other: "Series",
         method: str = "pearson",
-        min_periods: Optional[int] = None,
+        min_periods: Any = None,
     ) -> float:
         """
         Compute correlation with other Series.
@@ -3767,8 +3803,8 @@ class Series:
     def cov(
         self,
         other: "Series",
-        min_periods: Optional[int] = None,
-        ddof: Optional[int] = None,
+        min_periods: Any = None,
+        ddof: Any = None,
     ) -> float:
         """
         Compute covariance with other Series.
@@ -3796,9 +3832,9 @@ class Series:
     def divmod(
         self,
         other: Any,
-        fill_value: Optional[Any] = None,
+        fill_value: Any = None,
         axis: int = 0,
-        level: Optional[Any] = None,
+        level: Any = None,
     ) -> Tuple["Series", "Series"]:
         """
         Return integer division and modulo of division.
@@ -3830,9 +3866,9 @@ class Series:
     def rdivmod(
         self,
         other: Any,
-        fill_value: Optional[Any] = None,
+        fill_value: Any = None,
         axis: int = 0,
-        level: Optional[Any] = None,
+        level: Any = None,
     ) -> Tuple["Series", "Series"]:
         """
         Return integer division and modulo of division (reverse).
@@ -3912,9 +3948,7 @@ class Series:
         else:
             return list(range(len(self._series)))
 
-    def to_clipboard(
-        self, excel: bool = True, sep: Optional[str] = None, **kwargs: Any
-    ) -> None:
+    def to_clipboard(self, excel: bool = True, sep: Any = None, **kwargs: Any) -> None:
         """Copy object to clipboard."""
         try:
             import pyperclip
@@ -3931,20 +3965,20 @@ class Series:
         excel_writer: Any,
         sheet_name: str = "Sheet1",
         na_rep: str = "",
-        float_format: Optional[str] = None,
-        columns: Optional[Any] = None,
-        header: Union[bool, List[str]] = True,
+        float_format: Any = None,
+        columns: Any = None,
+        header: Any = True,
         index: bool = True,
-        index_label: Optional[Any] = None,
+        index_label: Any = None,
         startrow: int = 0,
         startcol: int = 0,
-        engine: Optional[str] = None,
+        engine: Any = None,
         merge_cells: bool = True,
-        encoding: Optional[str] = None,
+        encoding: Any = None,
         inf_rep: str = "inf",
         verbose: bool = True,
-        freeze_panes: Optional[Tuple[int, int]] = None,
-        storage_options: Optional[Any] = None,
+        freeze_panes: Any = None,
+        storage_options: Any = None,
         **kwargs: Any,
     ) -> None:
         """Write Series to Excel file."""
@@ -3976,15 +4010,15 @@ class Series:
         path_or_buf: Any,
         key: str,
         mode: str = "a",
-        complevel: Optional[int] = None,
-        complib: Optional[str] = None,
+        complevel: Any = None,
+        complib: Any = None,
         append: bool = False,
-        format: Optional[str] = None,
+        format: Any = None,
         index: bool = True,
-        min_itemsize: Optional[Any] = None,
-        nan_rep: Optional[Any] = None,
-        dropna: Optional[bool] = None,
-        data_columns: Optional[Any] = None,
+        min_itemsize: Any = None,
+        nan_rep: Any = None,
+        dropna: Any = None,
+        data_columns: Any = None,
         errors: str = "strict",
         encoding: str = "UTF-8",
         **kwargs: Any,
@@ -4013,21 +4047,21 @@ class Series:
 
     def to_json(
         self,
-        path_or_buf: Optional[Any] = None,
+        path_or_buf: Any = None,
         orient: str = "records",
         date_format: str = "epoch",
         double_precision: int = 10,
         force_ascii: bool = True,
         date_unit: str = "ms",
-        default_handler: Optional[Any] = None,
+        default_handler: Any = None,
         lines: bool = False,
-        compression: Optional[str] = None,
+        compression: Any = None,
         index: bool = True,
-        indent: Optional[int] = None,
-        storage_options: Optional[Any] = None,
+        indent: Any = None,
+        storage_options: Any = None,
         mode: str = "w",
         **kwargs: Any,
-    ) -> Optional[str]:
+    ) -> Any:
         """Convert Series to JSON string."""
         import json
 
@@ -4049,29 +4083,29 @@ class Series:
 
     def to_latex(
         self,
-        buf: Optional[Any] = None,
-        columns: Optional[Any] = None,
+        buf: Any = None,
+        columns: Any = None,
         header: bool = True,
         index: bool = True,
         na_rep: str = "NaN",
-        formatters: Optional[Any] = None,
-        float_format: Optional[str] = None,
-        sparsify: Optional[bool] = None,
+        formatters: Any = None,
+        float_format: Any = None,
+        sparsify: Any = None,
         index_names: bool = True,
         bold_rows: bool = False,
-        column_format: Optional[str] = None,
+        column_format: Any = None,
         longtable: bool = False,
         escape: bool = True,
-        encoding: Optional[str] = None,
+        encoding: Any = None,
         decimal: str = ".",
-        multicolumn: Optional[bool] = None,
-        multicolumn_format: Optional[str] = None,
-        multirow: Optional[bool] = None,
-        caption: Optional[str] = None,
-        label: Optional[str] = None,
-        position: Optional[str] = None,
+        multicolumn: Any = None,
+        multicolumn_format: Any = None,
+        multirow: Any = None,
+        caption: Any = None,
+        label: Any = None,
+        position: Any = None,
         **kwargs: Any,
-    ) -> Optional[str]:
+    ) -> Any:
         """Render Series to LaTeX table."""
         from .frame import DataFrame
 
@@ -4089,12 +4123,12 @@ class Series:
 
     def to_markdown(
         self,
-        buf: Optional[Any] = None,
+        buf: Any = None,
         mode: str = "wt",
         index: bool = True,
-        storage_options: Optional[Any] = None,
+        storage_options: Any = None,
         **kwargs: Any,
-    ) -> Optional[str]:
+    ) -> Any:
         """Print Series in Markdown-friendly format."""
         from .frame import DataFrame
 
@@ -4106,9 +4140,9 @@ class Series:
     def to_pickle(
         self,
         path: str,
-        compression: Optional[str] = None,
-        protocol: Optional[int] = None,
-        storage_options: Optional[Any] = None,
+        compression: Any = None,
+        protocol: Any = None,
+        storage_options: Any = None,
         **kwargs: Any,
     ) -> None:
         """Pickle (serialize) object to file."""
@@ -4130,13 +4164,13 @@ class Series:
         self,
         name: str,
         con: Any,
-        schema: Optional[str] = None,
+        schema: Any = None,
         if_exists: str = "fail",
         index: bool = True,
-        index_label: Optional[Any] = None,
-        chunksize: Optional[int] = None,
-        dtype: Optional[Any] = None,
-        method: Optional[Any] = None,
+        index_label: Any = None,
+        chunksize: Any = None,
+        dtype: Any = None,
+        method: Any = None,
         **kwargs: Any,
     ) -> None:
         """Write Series to SQL database."""
@@ -4156,7 +4190,7 @@ class Series:
             **kwargs,
         )
 
-    def to_xarray(self, dim_order: Optional[List[str]] = None, **kwargs: Any) -> Any:
+    def to_xarray(self, dim_order: Any = None, **kwargs: Any) -> Any:
         """Return an xarray.DataArray representation of the Series."""
         try:
             import numpy as np
@@ -4223,15 +4257,15 @@ class Series:
     # Window/rolling methods
     def ewm(
         self,
-        com: Optional[float] = None,
-        span: Optional[float] = None,
-        halflife: Optional[float] = None,
-        alpha: Optional[float] = None,
+        com: Any = None,
+        span: Any = None,
+        halflife: Any = None,
+        alpha: Any = None,
         min_periods: int = 0,
         adjust: bool = True,
         ignore_na: bool = False,
         axis: int = 0,
-        times: Optional[Any] = None,
+        times: Any = None,
         method: str = "single",
         **kwargs: Any,
     ) -> Any:
@@ -4250,14 +4284,14 @@ class Series:
 
     def rolling(
         self,
-        window: Union[int, str],
-        min_periods: Optional[int] = None,
+        window: Any,
+        min_periods: Any = None,
         center: bool = False,
-        win_type: Optional[str] = None,
-        on: Optional[str] = None,
+        win_type: Any = None,
+        on: Any = None,
         axis: int = 0,
-        closed: Optional[str] = None,
-        step: Optional[int] = None,
+        closed: Any = None,
+        step: Any = None,
         method: str = "single",
         **kwargs: Any,
     ) -> Any:
@@ -4282,7 +4316,7 @@ class Series:
 
     def droplevel(
         self,
-        level: Union[int, str, List[Union[int, str]]],
+        level: Any,
         axis: int = 0,
         **kwargs: Any,
     ) -> "Series":
@@ -4291,7 +4325,7 @@ class Series:
             "droplevel() requires MultiIndex. Not yet implemented for simple Series"
         )
 
-    def infer_objects(self, copy: Optional[bool] = None) -> "Series":
+    def infer_objects(self, copy: Any = None) -> "Series":
         """Attempt to infer better dtypes for object columns."""
         return self.copy() if copy else self
 
@@ -4299,13 +4333,13 @@ class Series:
         self,
         method: str = "linear",
         axis: int = 0,
-        limit: Optional[int] = None,
+        limit: Any = None,
         inplace: bool = False,
-        limit_direction: Optional[str] = None,
-        limit_area: Optional[str] = None,
-        downcast: Optional[str] = None,
+        limit_direction: Any = None,
+        limit_area: Any = None,
+        downcast: Any = None,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """Interpolate missing values."""
         if method == "linear":
             result = Series(self._series.interpolate())
@@ -4322,12 +4356,12 @@ class Series:
         cond: Any,
         other: Any = None,
         inplace: bool = False,
-        axis: Optional[int] = None,
-        level: Optional[Any] = None,
+        axis: Any = None,
+        level: Any = None,
         errors: str = "raise",
         try_cast: bool = False,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """Replace values where condition is True."""
         if isinstance(cond, Series):
             cond = cond._series
@@ -4343,14 +4377,14 @@ class Series:
 
     def reindex(
         self,
-        index: Optional[Any] = None,
-        axis: Optional[int] = None,
-        method: Optional[str] = None,
+        index: Any = None,
+        axis: Any = None,
+        method: Any = None,
         copy: bool = True,
-        level: Optional[Any] = None,
-        fill_value: Optional[Any] = None,
-        limit: Optional[int] = None,
-        tolerance: Optional[Any] = None,
+        level: Any = None,
+        fill_value: Any = None,
+        limit: Any = None,
+        tolerance: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """Reindex to new index."""
@@ -4363,10 +4397,10 @@ class Series:
     def reindex_like(
         self,
         other: "Series",
-        method: Optional[str] = None,
+        method: Any = None,
         copy: bool = True,
-        limit: Optional[int] = None,
-        tolerance: Optional[Any] = None,
+        limit: Any = None,
+        tolerance: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """Reindex like another Series."""
@@ -4381,13 +4415,13 @@ class Series:
 
     def rename_axis(
         self,
-        mapper: Optional[Any] = None,
-        index: Optional[Any] = None,
+        mapper: Any = None,
+        index: Any = None,
         axis: int = 0,
         copy: bool = True,
         inplace: bool = False,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """Rename axis."""
         result = self.copy() if copy else self
         if mapper:
@@ -4398,16 +4432,14 @@ class Series:
         return result
 
     def reorder_levels(
-        self, order: List[Union[int, str]], axis: int = 0, **kwargs: Any
+        self, order: List[Any], axis: int = 0, **kwargs: Any
     ) -> "Series":
         """Reorder MultiIndex levels."""
         raise NotImplementedError(
             "reorder_levels() requires MultiIndex. Not yet implemented"
         )
 
-    def repeat(
-        self, repeats: Union[int, List[int]], axis: Optional[int] = None, **kwargs: Any
-    ) -> "Series":
+    def repeat(self, repeats: Any, axis: Any = None, **kwargs: Any) -> "Series":
         """Repeat elements."""
         if isinstance(repeats, int):
             return Series(self._series.repeat(repeats))
@@ -4420,12 +4452,12 @@ class Series:
 
     def sample(
         self,
-        n: Optional[int] = None,
-        frac: Optional[float] = None,
+        n: Any = None,
+        frac: Any = None,
         replace: bool = False,
-        weights: Optional[Any] = None,
-        random_state: Optional[Any] = None,
-        axis: Optional[int] = None,
+        weights: Any = None,
+        random_state: Any = None,
+        axis: Any = None,
         ignore_index: bool = False,
         **kwargs: Any,
     ) -> "Series":
@@ -4442,9 +4474,9 @@ class Series:
         self,
         value: Any,
         side: str = "left",
-        sorter: Optional[Any] = None,
+        sorter: Any = None,
         **kwargs: Any,
-    ) -> Union[int, "Series"]:
+    ) -> Any:
         """Find insertion points."""
         sorted_series = self._series.sort()
         if side == "left":
@@ -4462,7 +4494,7 @@ class Series:
         inplace: bool = False,
         copy: bool = True,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """Set axis labels."""
         result = self.copy() if copy else self
         result._index = list(labels) if labels is not None else None
@@ -4474,22 +4506,22 @@ class Series:
     def set_flags(
         self,
         copy: bool = False,
-        allows_duplicate_labels: Optional[bool] = None,
+        allows_duplicate_labels: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """Set flags."""
         # Polars doesn't have flags, return copy
         return self.copy() if copy else self
 
-    def squeeze(self, axis: Optional[int] = None, **kwargs: Any) -> "Series":
+    def squeeze(self, axis: Any = None, **kwargs: Any) -> "Series":
         """Squeeze dimensions (no-op for Series)."""
         return self
 
     def take(
         self,
         indices: Any,
-        axis: Optional[int] = None,
-        is_copy: Optional[bool] = None,
+        axis: Any = None,
+        is_copy: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """Take elements by position."""
@@ -4499,9 +4531,7 @@ class Series:
 
     def transform(
         self,
-        func: Union[
-            Callable, str, List[Union[Callable, str]], Dict[str, Union[Callable, str]]
-        ],
+        func: Any,
         axis: int = 0,
         *args: Any,
         **kwargs: Any,
@@ -4520,9 +4550,9 @@ class Series:
 
     def truncate(
         self,
-        before: Optional[Any] = None,
-        after: Optional[Any] = None,
-        axis: Optional[int] = None,
+        before: Any = None,
+        after: Any = None,
+        axis: Any = None,
         copy: bool = True,
         **kwargs: Any,
     ) -> "Series":
@@ -4551,8 +4581,8 @@ class Series:
 
     def unstack(
         self,
-        level: Union[int, str, List[Union[int, str]]] = -1,
-        fill_value: Optional[Any] = None,
+        level: Any = -1,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> Any:
         """Unstack (for MultiIndex)."""
@@ -4563,7 +4593,7 @@ class Series:
         other: "Series",
         join: str = "left",
         overwrite: bool = True,
-        filter_func: Optional[Any] = None,
+        filter_func: Any = None,
         errors: str = "ignore",
         **kwargs: Any,
     ) -> None:
@@ -4582,12 +4612,12 @@ class Series:
         cond: Any,
         other: Any = None,
         inplace: bool = False,
-        axis: Optional[int] = None,
-        level: Optional[Any] = None,
+        axis: Any = None,
+        level: Any = None,
         errors: str = "raise",
         try_cast: bool = False,
         **kwargs: Any,
-    ) -> Optional["Series"]:
+    ) -> Any:
         """Replace where condition is False."""
         if isinstance(cond, Series):
             cond = cond._series
@@ -4605,7 +4635,7 @@ class Series:
         self,
         key: Any,
         axis: int = 0,
-        level: Optional[Any] = None,
+        level: Any = None,
         drop_level: bool = True,
         **kwargs: Any,
     ) -> "Series":
@@ -4683,9 +4713,9 @@ class Series:
 
     def prod(
         self,
-        axis: Optional[int] = None,
+        axis: Any = None,
         skipna: bool = True,
-        numeric_only: Optional[bool] = None,
+        numeric_only: Any = None,
         min_count: int = 0,
         **kwargs: Any,
     ) -> Any:
@@ -4694,9 +4724,9 @@ class Series:
 
     def product(
         self,
-        axis: Optional[int] = None,
+        axis: Any = None,
         skipna: bool = True,
-        numeric_only: Optional[bool] = None,
+        numeric_only: Any = None,
         min_count: int = 0,
         **kwargs: Any,
     ) -> Any:
@@ -4713,7 +4743,7 @@ class Series:
     def case_when(
         self,
         caselist: List[Tuple[Any, Any]],
-        default: Optional[Any] = None,
+        default: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """Case when conditions."""
@@ -4733,9 +4763,9 @@ class Series:
 
     def groupby(
         self,
-        by: Optional[Any] = None,
+        by: Any = None,
         axis: int = 0,
-        level: Optional[Any] = None,
+        level: Any = None,
         as_index: bool = True,
         sort: bool = True,
         group_keys: bool = True,
@@ -4775,28 +4805,28 @@ class Series:
     def plot(
         self,
         kind: str = "line",
-        ax: Optional[Any] = None,
-        figsize: Optional[Tuple[int, int]] = None,
+        ax: Any = None,
+        figsize: Any = None,
         use_index: bool = True,
-        title: Optional[str] = None,
-        grid: Optional[bool] = None,
-        legend: Union[bool, str] = False,
-        style: Optional[Any] = None,
-        logx: Union[bool, str] = False,
-        logy: Union[bool, str] = False,
-        loglog: Union[bool, str] = False,
-        xticks: Optional[Any] = None,
-        yticks: Optional[Any] = None,
-        xlim: Optional[Any] = None,
-        ylim: Optional[Any] = None,
-        rot: Optional[float] = None,
-        fontsize: Optional[int] = None,
-        colormap: Optional[str] = None,
+        title: Any = None,
+        grid: Any = None,
+        legend: Any = False,
+        style: Any = None,
+        logx: Any = False,
+        logy: Any = False,
+        loglog: Any = False,
+        xticks: Any = None,
+        yticks: Any = None,
+        xlim: Any = None,
+        ylim: Any = None,
+        rot: Any = None,
+        fontsize: Any = None,
+        colormap: Any = None,
         table: bool = False,
-        yerr: Optional[Any] = None,
-        xerr: Optional[Any] = None,
-        label: Optional[str] = None,
-        secondary_y: Union[bool, str] = False,
+        yerr: Any = None,
+        xerr: Any = None,
+        label: Any = None,
+        secondary_y: Any = False,
         mark_right: bool = True,
         **kwargs: Any,
     ) -> Any:
@@ -4826,7 +4856,7 @@ class Series:
 
     def to_period(
         self,
-        freq: Optional[str] = None,
+        freq: Any = None,
         axis: int = 0,
         copy: bool = True,
         **kwargs: Any,
@@ -4838,8 +4868,8 @@ class Series:
 
     def swaplevel(
         self,
-        i: Union[int, str] = -2,
-        j: Union[int, str] = -1,
+        i: Any = -2,
+        j: Any = -1,
         axis: int = 0,
         **kwargs: Any,
     ) -> "Series":
@@ -4876,10 +4906,10 @@ class Series:
     def asfreq(
         self,
         freq: str,
-        method: Optional[str] = None,
-        how: Optional[str] = None,
+        method: Any = None,
+        how: Any = None,
         normalize: bool = False,
-        fill_value: Optional[Any] = None,
+        fill_value: Any = None,
         **kwargs: Any,
     ) -> "Series":
         """
@@ -5042,16 +5072,16 @@ class Series:
         self,
         rule: str,
         axis: int = 0,
-        closed: Optional[str] = None,
-        label: Optional[str] = None,
+        closed: Any = None,
+        label: Any = None,
         convention: str = "start",
-        kind: Optional[str] = None,
-        loffset: Optional[Any] = None,
-        base: Optional[int] = None,
-        on: Optional[str] = None,
-        level: Optional[Any] = None,
+        kind: Any = None,
+        loffset: Any = None,
+        base: Any = None,
+        on: Any = None,
+        level: Any = None,
         origin: str = "start_day",
-        offset: Optional[Any] = None,
+        offset: Any = None,
         group_keys: bool = False,
         **kwargs: Any,
     ) -> Any:
@@ -5109,7 +5139,7 @@ class Series:
 
     def to_timestamp(
         self,
-        freq: Optional[Any] = None,
+        freq: Any = None,
         how: str = "start",
         copy: bool = True,
         **kwargs: Any,
@@ -5165,7 +5195,7 @@ class Series:
         self,
         tz: Any,
         axis: int = 0,
-        level: Optional[Any] = None,
+        level: Any = None,
         copy: bool = True,
         **kwargs: Any,
     ) -> "Series":
@@ -5221,7 +5251,7 @@ class Series:
         self,
         tz: Any,
         axis: int = 0,
-        level: Optional[Any] = None,
+        level: Any = None,
         copy: bool = True,
         ambiguous: str = "raise",
         nonexistent: str = "raise",
@@ -5355,9 +5385,7 @@ class _StringAccessor:
         """Replace pattern with replacement."""
         return Series(self._series.str.replace_all(pat, repl))
 
-    def split(
-        self, pat: Optional[str] = None, n: int = -1, expand: bool = False
-    ) -> Union["Series", "DataFrame"]:
+    def split(self, pat: Any = None, n: int = -1, expand: bool = False) -> Any:
         """
         Split strings around given separator/delimiter.
 
@@ -5413,9 +5441,7 @@ class _StringAccessor:
         else:
             return Series(self._series.str.split(by=pat))
 
-    def extract(
-        self, pat: str, flags: int = 0, expand: bool = True
-    ) -> Union["Series", "DataFrame"]:
+    def extract(self, pat: str, flags: int = 0, expand: bool = True) -> Any:
         """
         Extract capture groups in the regex pat as columns in a DataFrame.
 
@@ -5451,9 +5477,9 @@ class _StringAccessor:
 
     def slice(
         self,
-        start: Optional[int] = None,
-        stop: Optional[int] = None,
-        step: Optional[int] = None,
+        start: Any = None,
+        stop: Any = None,
+        step: Any = None,
     ) -> "Series":
         """
         Slice substrings from each element in the Series.
@@ -5476,7 +5502,7 @@ class _StringAccessor:
         if step is not None and step != 1:
             # Implement step support using Python string slicing
             # This is a workaround since Polars doesn't support step in str.slice
-            def apply_step_slice(s: Optional[str]) -> Optional[str]:
+            def apply_step_slice(s: Any) -> Any:
                 if s is None:
                     return None
                 return s[start:stop:step]
@@ -5499,7 +5525,7 @@ class _StringAccessor:
     def center(self, width: int, fillchar: str = " ") -> "Series":
         """Center strings in a Series."""
 
-        def center_str(s: Optional[str]) -> Optional[str]:
+        def center_str(s: Any) -> Any:
             if s is None:
                 return None
             return s.center(width, fillchar)
@@ -5514,13 +5540,13 @@ class _StringAccessor:
         """Right justify strings in a Series."""
         return Series(self._series.str.pad_start(width, fillchar))
 
-    def lstrip(self, chars: Optional[str] = None) -> "Series":
+    def lstrip(self, chars: Any = None) -> "Series":
         """Remove leading characters."""
         if chars is None:
             return Series(self._series.str.strip_chars_start())
         return Series(self._series.str.strip_chars_start(chars))
 
-    def rstrip(self, chars: Optional[str] = None) -> "Series":
+    def rstrip(self, chars: Any = None) -> "Series":
         """Remove trailing characters."""
         if chars is None:
             return Series(self._series.str.strip_chars_end())
@@ -5529,7 +5555,7 @@ class _StringAccessor:
     def swapcase(self) -> "Series":
         """Swap case of strings."""
 
-        def swap_case(s: Optional[str]) -> Optional[str]:
+        def swap_case(s: Any) -> Any:
             if s is None:
                 return None
             return s.swapcase()
@@ -5539,7 +5565,7 @@ class _StringAccessor:
     def title(self) -> "Series":
         """Convert strings to title case."""
 
-        def title_case(s: Optional[str]) -> Optional[str]:
+        def title_case(s: Any) -> Any:
             if s is None:
                 return None
             return s.title()
@@ -5554,7 +5580,7 @@ class _StringAccessor:
     def isalnum(self) -> "Series":
         """Check if all characters are alphanumeric."""
 
-        def check_alnum(s: Optional[str]) -> Optional[bool]:
+        def check_alnum(s: Any) -> Any:
             if s is None:
                 return None
             return s.isalnum()
@@ -5564,7 +5590,7 @@ class _StringAccessor:
     def isalpha(self) -> "Series":
         """Check if all characters are alphabetic."""
 
-        def check_alpha(s: Optional[str]) -> Optional[bool]:
+        def check_alpha(s: Any) -> Any:
             if s is None:
                 return None
             return s.isalpha()
@@ -5574,7 +5600,7 @@ class _StringAccessor:
     def isascii(self) -> "Series":
         """Check if all characters are ASCII."""
 
-        def check_ascii(s: Optional[str]) -> Optional[bool]:
+        def check_ascii(s: Any) -> Any:
             if s is None:
                 return None
             return s.isascii()
@@ -5584,7 +5610,7 @@ class _StringAccessor:
     def isdecimal(self) -> "Series":
         """Check if all characters are decimal."""
 
-        def check_decimal(s: Optional[str]) -> Optional[bool]:
+        def check_decimal(s: Any) -> Any:
             if s is None:
                 return None
             return s.isdecimal()
@@ -5594,7 +5620,7 @@ class _StringAccessor:
     def isdigit(self) -> "Series":
         """Check if all characters are digits."""
 
-        def check_digit(s: Optional[str]) -> Optional[bool]:
+        def check_digit(s: Any) -> Any:
             if s is None:
                 return None
             return s.isdigit()
@@ -5604,7 +5630,7 @@ class _StringAccessor:
     def islower(self) -> "Series":
         """Check if all characters are lowercase."""
 
-        def check_lower(s: Optional[str]) -> Optional[bool]:
+        def check_lower(s: Any) -> Any:
             if s is None:
                 return None
             return s.islower()
@@ -5614,7 +5640,7 @@ class _StringAccessor:
     def isnumeric(self) -> "Series":
         """Check if all characters are numeric."""
 
-        def check_numeric(s: Optional[str]) -> Optional[bool]:
+        def check_numeric(s: Any) -> Any:
             if s is None:
                 return None
             return s.isnumeric()
@@ -5624,7 +5650,7 @@ class _StringAccessor:
     def isspace(self) -> "Series":
         """Check if all characters are whitespace."""
 
-        def check_space(s: Optional[str]) -> Optional[bool]:
+        def check_space(s: Any) -> Any:
             if s is None:
                 return None
             return s.isspace()
@@ -5634,7 +5660,7 @@ class _StringAccessor:
     def istitle(self) -> "Series":
         """Check if strings are in title case."""
 
-        def check_title(s: Optional[str]) -> Optional[bool]:
+        def check_title(s: Any) -> Any:
             if s is None:
                 return None
             return s.istitle()
@@ -5644,7 +5670,7 @@ class _StringAccessor:
     def isupper(self) -> "Series":
         """Check if all characters are uppercase."""
 
-        def check_upper(s: Optional[str]) -> Optional[bool]:
+        def check_upper(s: Any) -> Any:
             if s is None:
                 return None
             return s.isupper()
@@ -5652,10 +5678,10 @@ class _StringAccessor:
         return Series(self._series.map_elements(check_upper, return_dtype=pl.Boolean))
 
     # String Finding/Indexing
-    def find(self, sub: str, start: int = 0, end: Optional[int] = None) -> "Series":
+    def find(self, sub: str, start: int = 0, end: Any = None) -> "Series":
         """Find substring in each string, return -1 if not found."""
 
-        def find_sub(s: Optional[str]) -> Optional[int]:
+        def find_sub(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5665,10 +5691,10 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(find_sub, return_dtype=pl.Int64))
 
-    def rfind(self, sub: str, start: int = 0, end: Optional[int] = None) -> "Series":
+    def rfind(self, sub: str, start: int = 0, end: Any = None) -> "Series":
         """Find substring from right, return -1 if not found."""
 
-        def rfind_sub(s: Optional[str]) -> Optional[int]:
+        def rfind_sub(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5678,10 +5704,10 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(rfind_sub, return_dtype=pl.Int64))
 
-    def index(self, sub: str, start: int = 0, end: Optional[int] = None) -> "Series":
+    def index(self, sub: str, start: int = 0, end: Any = None) -> "Series":
         """Find substring, raise ValueError if not found."""
 
-        def index_sub(s: Optional[str]) -> Optional[int]:
+        def index_sub(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5692,10 +5718,10 @@ class _StringAccessor:
 
         return Series(self._series.map_elements(index_sub, return_dtype=pl.Int64))
 
-    def rindex(self, sub: str, start: int = 0, end: Optional[int] = None) -> "Series":
+    def rindex(self, sub: str, start: int = 0, end: Any = None) -> "Series":
         """Find substring from right, raise ValueError if not found."""
 
-        def rindex_sub(s: Optional[str]) -> Optional[int]:
+        def rindex_sub(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5709,7 +5735,7 @@ class _StringAccessor:
     def get(self, i: int) -> "Series":
         """Get character at position."""
 
-        def get_char(s: Optional[str]) -> Optional[str]:
+        def get_char(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5720,12 +5746,12 @@ class _StringAccessor:
         return Series(self._series.map_elements(get_char, return_dtype=pl.Utf8))
 
     # String Splitting/Partitioning
-    def rsplit(self, pat: Optional[str] = None, n: int = -1) -> "Series":
+    def rsplit(self, pat: Any = None, n: int = -1) -> "Series":
         """Split strings from the right."""
         if pat is None:
             pat = " "
 
-        def rsplit_str(s: Optional[str]) -> Optional[List[str]]:
+        def rsplit_str(s: Any) -> Any:
             if s is None:
                 return None
             return s.rsplit(pat, n)
@@ -5737,13 +5763,13 @@ class _StringAccessor:
     def partition(self, sep: str = " ") -> "Series":
         """Partition strings at first occurrence of separator."""
 
-        def partition_str(s: Optional[str]) -> Optional[Tuple[str, str, str]]:
+        def partition_str(s: Any) -> Any:
             if s is None:
                 return None
             return s.partition(sep)
 
         # Return as list of strings
-        def partition_to_list(s: Optional[str]) -> Optional[List[str]]:
+        def partition_to_list(s: Any) -> Any:
             if s is None:
                 return None
             parts = s.partition(sep)
@@ -5756,7 +5782,7 @@ class _StringAccessor:
     def rpartition(self, sep: str = " ") -> "Series":
         """Partition strings at last occurrence of separator."""
 
-        def rpartition_to_list(s: Optional[str]) -> Optional[List[str]]:
+        def rpartition_to_list(s: Any) -> Any:
             if s is None:
                 return None
             parts = s.rpartition(sep)
@@ -5767,11 +5793,11 @@ class _StringAccessor:
         )
 
     # String Manipulation
-    def repeat(self, repeats: Union[int, "Series"]) -> "Series":
+    def repeat(self, repeats: Any) -> "Series":
         """Repeat strings."""
         if isinstance(repeats, Series):
 
-            def repeat_with_series(s: Optional[str], r: Optional[int]) -> Optional[str]:
+            def repeat_with_series(s: Any, r: Any) -> Any:
                 if s is None or r is None:
                     return None
                 return s * r if r >= 0 else ""
@@ -5786,7 +5812,7 @@ class _StringAccessor:
             return Series(result)
         else:
 
-            def repeat_str(s: Optional[str]) -> Optional[str]:
+            def repeat_str(s: Any) -> Any:
                 if s is None:
                     return None
                 return s * repeats if repeats >= 0 else ""
@@ -5796,7 +5822,7 @@ class _StringAccessor:
     def join(self, sep: str) -> "Series":
         """Join strings with separator."""
 
-        def join_str(s: Optional[str]) -> Optional[str]:
+        def join_str(s: Any) -> Any:
             if s is None:
                 return None
             # If s is a string, join its characters
@@ -5807,7 +5833,7 @@ class _StringAccessor:
     def removeprefix(self, prefix: str) -> "Series":
         """Remove prefix from strings."""
 
-        def remove_prefix(s: Optional[str]) -> Optional[str]:
+        def remove_prefix(s: Any) -> Any:
             if s is None:
                 return None
             return s.removeprefix(prefix)
@@ -5817,7 +5843,7 @@ class _StringAccessor:
     def removesuffix(self, suffix: str) -> "Series":
         """Remove suffix from strings."""
 
-        def remove_suffix(s: Optional[str]) -> Optional[str]:
+        def remove_suffix(s: Any) -> Any:
             if s is None:
                 return None
             return s.removesuffix(suffix)
@@ -5825,11 +5851,11 @@ class _StringAccessor:
         return Series(self._series.map_elements(remove_suffix, return_dtype=pl.Utf8))
 
     def slice_replace(
-        self, start: Optional[int] = None, stop: Optional[int] = None, repl: str = ""
+        self, start: Any = None, stop: Any = None, repl: str = ""
     ) -> "Series":
         """Replace slice of strings."""
 
-        def slice_replace_str(s: Optional[str]) -> Optional[str]:
+        def slice_replace_str(s: Any) -> Any:
             if s is None:
                 return None
             if start is None and stop is None:
@@ -5859,7 +5885,7 @@ class _StringAccessor:
         """Find all matches of pattern."""
         import re
 
-        def find_all(s: Optional[str]) -> Optional[List[str]]:
+        def find_all(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5875,7 +5901,7 @@ class _StringAccessor:
         """Check if full string matches pattern."""
         import re
 
-        def full_match(s: Optional[str]) -> Optional[bool]:
+        def full_match(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5889,7 +5915,7 @@ class _StringAccessor:
         """Check if string matches pattern at start."""
         import re
 
-        def match_str(s: Optional[str]) -> Optional[bool]:
+        def match_str(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5904,7 +5930,7 @@ class _StringAccessor:
         import re
 
         # Extract all matches for each string
-        def extract_all(s: Optional[str]) -> Optional[List[Dict[str, str]]]:
+        def extract_all(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5933,7 +5959,7 @@ class _StringAccessor:
     def encode(self, encoding: str = "utf-8", errors: str = "strict") -> "Series":
         """Encode strings to bytes."""
 
-        def encode_str(s: Optional[str]) -> Optional[bytes]:
+        def encode_str(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5942,7 +5968,7 @@ class _StringAccessor:
                 return None
 
         # Polars doesn't have native bytes type, return as list of integers
-        def encode_to_list(s: Optional[str]) -> Optional[List[int]]:
+        def encode_to_list(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5958,7 +5984,7 @@ class _StringAccessor:
         """Decode bytes to strings."""
 
         # For Series of bytes (as list of ints), decode them
-        def decode_bytes(s: Optional[List[int]]) -> Optional[str]:
+        def decode_bytes(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -5971,9 +5997,9 @@ class _StringAccessor:
     # Special Operations
     def cat(
         self,
-        others: Optional[Union["Series", List["Series"]]] = None,
-        sep: Optional[str] = None,
-        na_rep: Optional[str] = None,
+        others: Any = None,
+        sep: Any = None,
+        na_rep: Any = None,
         join: str = "left",
     ) -> "Series":
         """Concatenate strings."""
@@ -6000,7 +6026,7 @@ class _StringAccessor:
         for val in sorted(unique_vals):
             # Use a factory function to properly capture val in closure
             def make_has_val(v: Any) -> Any:
-                def has_val(s: Optional[List[str]]) -> bool:
+                def has_val(s: Any) -> bool:
                     if s is None:
                         return False
                     return v in s
@@ -6019,7 +6045,7 @@ class _StringAccessor:
         try:
             import unicodedata
 
-            def normalize_str(s: Optional[str]) -> Optional[str]:
+            def normalize_str(s: Any) -> Any:
                 if s is None:
                     return None
                 try:
@@ -6036,10 +6062,10 @@ class _StringAccessor:
                 "This should be available in Python standard library."
             ) from None
 
-    def translate(self, table: Dict[int, Optional[str]]) -> "Series":
+    def translate(self, table: Dict[int, Any]) -> "Series":
         """Translate characters using translation table."""
 
-        def translate_str(s: Optional[str]) -> Optional[str]:
+        def translate_str(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -6058,7 +6084,7 @@ class _StringAccessor:
         """Wrap text to specified width."""
         import textwrap
 
-        def wrap_str(s: Optional[str]) -> Optional[str]:
+        def wrap_str(s: Any) -> Any:
             if s is None:
                 return None
             try:
@@ -6117,7 +6143,7 @@ class _DatetimeAccessor:
         """Format datetime as string."""
         return Series(self._series.dt.strftime(fmt))
 
-    def day_name(self, locale: Optional[str] = None) -> "Series":
+    def day_name(self, locale: Any = None) -> "Series":
         """
         Return the day names of the datetime with specified locale.
 
@@ -6148,7 +6174,7 @@ class _DatetimeAccessor:
         )
         return Series(result)
 
-    def month_name(self, locale: Optional[str] = None) -> "Series":
+    def month_name(self, locale: Any = None) -> "Series":
         """
         Return the month names of the datetime with specified locale.
 
@@ -6364,7 +6390,7 @@ class _DatetimeAccessor:
         from datetime import datetime
 
         # Convert Polars datetime to Python datetime
-        def to_py_dt(dt: Optional[Any]) -> Optional[datetime]:
+        def to_py_dt(dt: Any) -> Any:
             if dt is None:
                 return None
             # If already a datetime, return it
@@ -6454,7 +6480,7 @@ class _DatetimeAccessor:
         import polarpandas as ppd
 
         # Use Python's datetime.isocalendar() via map_elements
-        def get_isocalendar(dt: Optional[Any]) -> Optional[Dict[str, int]]:
+        def get_isocalendar(dt: Any) -> Any:
             if dt is None:
                 return None
             try:
