@@ -82,20 +82,20 @@ results.append(("DataFrame Creation (1M)", speedup))
 # ===========================================================================
 
 # Create a large CSV
-csv_file = tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode="w")
-csv_file.write("a,b,c\n")
-for i in range(100_000):
-    csv_file.write(f"{i},{i + 100000},{i * 1.5}\n")
-csv_file.close()
+with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode="w") as csv_file:
+    csv_file.write("a,b,c\n")
+    for i in range(100_000):
+        csv_file.write(f"{i},{i + 100000},{i * 1.5}\n")
+    csv_path = csv_file.name
 
 pd_time, ppd_time, speedup = benchmark(
     "2. Reading CSV (100k rows)",
-    lambda: pd.read_csv(csv_file.name),
-    lambda: ppd.read_csv(csv_file.name),
+    lambda: pd.read_csv(csv_path),
+    lambda: ppd.read_csv(csv_path),
 )
 results.append(("Read CSV (100k)", speedup))
 
-os.unlink(csv_file.name)
+os.unlink(csv_path)
 
 # ===========================================================================
 # BENCHMARK 3: Sorting Large Dataset

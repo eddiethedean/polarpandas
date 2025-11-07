@@ -4,25 +4,34 @@ Series implementation wrapping Polars Series with pandas-like API.
 
 from __future__ import annotations
 
-import builtins
 import contextlib
+import inspect
 import sys
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 import polars as pl
 
 if TYPE_CHECKING:
     from .frame import DataFrame
+
+BuiltinStr = str
+BuiltinList = list
+BuiltinDict = dict
+
+
+def _callable_accepts_argument(func: Any, parameter_name: str) -> bool:
+    """Check whether a callable accepts a named parameter."""
+
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return False
+
+    return any(
+        param.kind in (param.POSITIONAL_OR_KEYWORD, param.KEYWORD_ONLY)
+        and param.name == parameter_name
+        for param in signature.parameters.values()
+    )
 
 
 class Series:
@@ -130,7 +139,16 @@ class Series:
         - Empty Series can be created by passing None or empty list
         """
         # Store index information
-        self._index = index
+        index_values: BuiltinList[Any] | None = None
+        if index is not None:
+            if hasattr(index, "tolist") and not isinstance(index, (list, tuple)):
+                try:
+                    index_values = list(index.tolist())
+                except TypeError:
+                    index_values = list(index)
+            else:
+                index_values = list(index)
+        self._index = index_values
         self._index_name = None
         self._original_name = None  # Store original name type for restoration
 
@@ -145,6 +163,8 @@ class Series:
             )
         elif name is not None:
             self._original_name = name
+            if not isinstance(name, str):
+                polars_name = str(name)
 
         if data is None:
             self._series = pl.Series(name=polars_name or "", values=[])
@@ -159,16 +179,35 @@ class Series:
             # Note: pl.Series(name=..., values=...) - name must be keyword, data goes in values
             self._series = pl.Series(values=data, name=polars_name or "", **kwargs)
 
+        if self._index is not None and len(self._index) != len(self._series):
+            raise ValueError(
+                "Length of index must match length of data when constructing Series"
+            )
+
+        self._categorical_order: BuiltinList[Any] | None = None
+        if self._series.dtype == pl.Categorical:
+            self._categorical_order = self._series.cat.get_categories().to_list()
+
     @property
     def name(self) -> Any:
         """Get the name of the Series."""
-        return self._series.name
+        return (
+            self._original_name
+            if self._original_name is not None
+            else self._series.name
+        )
 
     @name.setter
     def name(self, value: Any) -> None:
         """Set the name of the Series."""
-        if value is not None:
-            self._series = self._series.rename(value)
+        if value is None:
+            self._original_name = None
+            self._series = self._series.rename("")
+            return
+
+        self._original_name = value
+        new_name = value if isinstance(value, str) else str(value)
+        self._series = self._series.rename(new_name)
 
     @property
     def values(self) -> Any:
@@ -237,7 +276,7 @@ class Series:
         return len(self._series)
 
     @property
-    def shape(self) -> Tuple[int]:
+    def shape(self) -> tuple[int]:
         """Return the shape of the Series."""
         return (len(self._series),)
 
@@ -286,6 +325,26 @@ class Series:
     def __rtruediv__(self, other: Any) -> Series:
         """Right divide (for scalar / Series)."""
         return Series(other / self._series)
+
+    def __and__(self, other: Any) -> Series:
+        """Element-wise logical AND supporting other Series or scalars."""
+
+        rhs = other._series if isinstance(other, Series) else other
+        try:
+            result = self._series.__and__(rhs)
+        except TypeError:
+            result = self._series.__and__(pl.Series(rhs))
+        return Series(result, index=self._index)
+
+    def __rand__(self, other: Any) -> Series:
+        """Reverse logical AND to support scalar & Series."""
+
+        rhs = other._series if isinstance(other, Series) else other
+        try:
+            result = self._series.__rand__(rhs)
+        except TypeError:
+            result = self._series.__rand__(pl.Series(rhs))
+        return Series(result, index=self._index)
 
     # Comparison operators
     def __gt__(self, other: Any) -> Series:
@@ -882,9 +941,9 @@ class Series:
 
     def rank(
         self,
-        method: builtins.str = "average",
+        method: BuiltinStr = "average",
         ascending: bool = True,
-        na_option: builtins.str = "keep",
+        na_option: BuiltinStr = "keep",
         pct: bool = False,
     ) -> Series:
         """
@@ -1109,7 +1168,10 @@ class Series:
                     return Series(self._series)
             target_dtype = list(polars_dtype.values())[0]
             result_series = self._series.cast(target_dtype)
-            return Series(result_series)
+            result = Series(result_series)
+            if target_dtype == pl.Categorical:
+                result._categorical_order = result_series.cat.get_categories().to_list()
+            return result
         except Exception:
             if errors == "raise":
                 raise
@@ -2013,7 +2075,7 @@ class Series:
         na_sentinel: Any = -1,
         use_na_sentinel: bool = True,
         **kwargs: Any,
-    ) -> Tuple[Any, Any]:
+    ) -> tuple[Any, Any]:
         """
         Encode the object as an enumerated type or categorical variable.
 
@@ -2801,7 +2863,7 @@ class Series:
             index = list(range(start_idx, len(self._series)))
         return Series(result_series, index=index)
 
-    def to_list(self) -> List[Any]:
+    def to_list(self) -> BuiltinList[Any]:
         """
         Return a list of the values.
 
@@ -2812,7 +2874,7 @@ class Series:
         """
         return self._series.to_list()
 
-    def tolist(self) -> List[Any]:
+    def tolist(self) -> BuiltinList[Any]:
         """
         Return a list of the values.
 
@@ -2912,7 +2974,12 @@ class Series:
         Series
             Copy of the Series
         """
-        return Series(self._series.clone())
+        new_index = list(self._index) if self._index is not None else None
+        copied = Series(self._series.clone(), name=self.name, index=new_index)
+        copied._index_name = self._index_name
+        if self._categorical_order is not None:
+            copied._categorical_order = list(self._categorical_order)
+        return copied
 
     @property
     def index(self) -> Any:
@@ -3473,7 +3540,7 @@ class Series:
         join: str = "outer",  # type: ignore[valid-type]
         axis: Any = None,
         **kwargs: Any,
-    ) -> Tuple[Series, Series]:
+    ) -> tuple[Series, Series]:
         """
         Align two Series on their index.
 
@@ -3839,7 +3906,7 @@ class Series:
         fill_value: Any = None,
         axis: int = 0,
         level: Any = None,
-    ) -> Tuple[Series, Series]:
+    ) -> tuple[Series, Series]:
         """
         Return integer division and modulo of division.
 
@@ -3873,7 +3940,7 @@ class Series:
         fill_value: Any = None,
         axis: int = 0,
         level: Any = None,
-    ) -> Tuple[Series, Series]:
+    ) -> tuple[Series, Series]:
         """
         Return integer division and modulo of division (reverse).
 
@@ -3922,7 +3989,7 @@ class Series:
             # Scalar multiplication
             return (self._series * other).sum()
 
-    def items(self) -> Iterator[Tuple[Any, Any]]:
+    def items(self) -> Iterator[tuple[Any, Any]]:
         """
         Lazily iterate over (index, value) pairs.
 
@@ -4166,16 +4233,16 @@ class Series:
 
     def to_sql(
         self,
-        name: str,  # type: ignore[valid-type]
+        name: BuiltinStr,
         con: Any,
-        schema: Optional[str] = None,  # type: ignore[valid-type]
-        if_exists: str = "fail",  # type: ignore[valid-type]
+        schema: BuiltinStr | None = None,
+        if_exists: BuiltinStr = "fail",
         index: bool = True,
-        index_label: Optional[Union[str, List[str]]] = None,  # type: ignore[valid-type]
-        chunksize: Optional[int] = None,
-        dtype: Optional[Dict[str, Any]] = None,  # type: ignore[valid-type]
-        method: Optional[Union[str, Callable]] = None,  # type: ignore[valid-type,type-arg]
-        primary_key: Optional[Union[str, List[str]]] = None,  # type: ignore[valid-type]
+        index_label: BuiltinStr | BuiltinList[BuiltinStr] | None = None,
+        chunksize: int | None = None,
+        dtype: BuiltinDict[BuiltinStr, Any] | None = None,
+        method: BuiltinStr | Callable[..., Any] | None = None,
+        primary_key: BuiltinStr | BuiltinList[BuiltinStr] | None = None,
         auto_increment: bool = False,
     ) -> None:
         """
@@ -4366,9 +4433,30 @@ class Series:
         **kwargs: Any,
     ) -> Any:
         """Provide rolling window calculations."""
-        raise NotImplementedError(
-            "rolling() is not yet implemented. Use Polars rolling functions directly"
-        )
+        if (
+            center
+            or win_type is not None
+            or on is not None
+            or closed is not None
+            or step is not None
+        ):
+            raise NotImplementedError(
+                "rolling() currently supports basic integer windows without center/on/closed/step/win_type"
+            )
+
+        if axis not in (0, "index"):
+            raise NotImplementedError("rolling() currently supports axis=0/index only")
+
+        if not isinstance(window, int):
+            raise TypeError("window must be an integer")
+
+        if min_periods is not None:
+            if not isinstance(min_periods, int):
+                raise TypeError("min_periods must be an integer")
+            if min_periods < 0:
+                raise ValueError("min_periods must be non-negative")
+
+        return _SeriesRolling(self, window=window, min_periods=min_periods, **kwargs)
 
     # Data manipulation methods
     def convert_dtypes(
@@ -4506,7 +4594,9 @@ class Series:
             return None
         return result
 
-    def reorder_levels(self, order: List[Any], axis: int = 0, **kwargs: Any) -> Series:
+    def reorder_levels(
+        self, order: BuiltinList[Any], axis: int = 0, **kwargs: Any
+    ) -> Series:
         """Reorder MultiIndex levels."""
         raise NotImplementedError(
             "reorder_levels() requires MultiIndex. Not yet implemented"
@@ -4731,19 +4821,12 @@ class Series:
     @property
     def cat(self) -> Any:
         """Categorical accessor."""
-        raise NotImplementedError("cat accessor is not yet implemented")
+        return _CategoricalAccessor(self)
 
     @property
     def list(self) -> Any:
         """List accessor."""
         raise NotImplementedError("list accessor is not yet implemented")
-
-    @property  # type: ignore[no-redef]
-    def str(self) -> Any:
-        """String accessor (already implemented)."""
-        from .series import _StringAccessor
-
-        return _StringAccessor(self)
 
     @property
     def struct(self) -> Any:
@@ -4772,16 +4855,26 @@ class Series:
 
     def mode(self, dropna: bool = True, **kwargs: Any) -> Series:
         """Mode value(s)."""
-        value_counts = self.value_counts(dropna=dropna)
-        if len(value_counts) == 0:
+        vc_struct = self.value_counts(dropna=dropna)._series
+        if vc_struct.len() == 0:
             return Series(pl.Series([], dtype=self._series.dtype))
-        max_count = value_counts.iloc[0]
-        modes = value_counts[value_counts == max_count]
-        return Series(
-            modes.index._series
-            if hasattr(modes.index, "_series")
-            else pl.Series(list(modes.index))
-        )
+
+        value_field_name = vc_struct.struct.fields[0]
+        values = vc_struct.struct.field(value_field_name)
+        counts = vc_struct.struct.field("count")
+
+        if dropna:
+            not_null = values.is_not_null()
+            values = values.filter(not_null)
+            counts = counts.filter(not_null)
+
+        if values.len() == 0:
+            return Series(pl.Series([], dtype=self._series.dtype))
+
+        max_count = counts.max()
+        mask = counts == max_count
+        mode_values = values.filter(mask)
+        return Series(mode_values)
 
     def nlargest(self, n: int = 5, keep: str = "first", **kwargs: Any) -> Series:  # type: ignore[valid-type]
         """N largest values."""
@@ -4824,7 +4917,7 @@ class Series:
     # Other methods
     def case_when(
         self,
-        caselist: List[Tuple[Any, Any]],
+        caselist: BuiltinList[tuple[Any, Any]],
         default: Any = None,
         **kwargs: Any,
     ) -> Series:
@@ -5398,6 +5491,127 @@ class Series:
         return result
 
     # I/O export methods
+
+
+class _CategoricalAccessor:
+    """Categorical operations accessor for Series."""
+
+    def __init__(self, series: Series):
+        self._series_obj = series
+        if series._series.dtype != pl.Categorical:
+            raise TypeError(
+                "Can only use .cat accessor with a 'category' dtype. "
+                "Use Series.astype('category') first."
+            )
+
+    def _categories_list(self) -> BuiltinList[Any]:
+        if self._series_obj._categorical_order is not None:
+            return list(self._series_obj._categorical_order)
+        categories = self._series_obj._series.cat.get_categories().to_list()
+        self._series_obj._categorical_order = list(categories)
+        return list(categories)
+
+    @property
+    def categories(self) -> Any:
+        """Return categories as an Index."""
+        from polarpandas.index import Index
+
+        return Index(self._categories_list())
+
+    @property
+    def codes(self) -> Series:
+        """Return integer codes for the categorical values."""
+        categories = self._categories_list()
+        mapping = {cat: idx for idx, cat in enumerate(categories)}
+        values = self._series_obj._series.to_list()
+        codes: BuiltinList[int] = []
+        for value in values:
+            if value is None:
+                codes.append(-1)
+            else:
+                codes.append(mapping.get(value, -1))
+
+        code_series = pl.Series(
+            name=self._series_obj.name or "",
+            values=codes,
+            dtype=pl.Int64,
+        )
+
+        index = (
+            list(self._series_obj._index)
+            if self._series_obj._index is not None
+            else None
+        )
+        result = Series(code_series, name=self._series_obj.name, index=index)
+        result._index_name = self._series_obj._index_name
+        return result
+
+    def rename_categories(self, new_categories: Any, inplace: bool = False) -> Any:
+        """Rename categories using a mapping or new sequence."""
+
+        current_categories = self._categories_list()
+
+        if isinstance(new_categories, dict):
+            mapping = new_categories
+            unknown = [k for k in mapping if k not in current_categories]
+            if unknown:
+                raise KeyError(
+                    f"Categories {unknown} are not present in the existing categories"
+                )
+            updated_categories = [mapping.get(cat, cat) for cat in current_categories]
+        else:
+            updated_categories = list(new_categories)
+            if len(updated_categories) != len(current_categories):
+                raise ValueError(
+                    "Length of new categories must match existing categories"
+                )
+            mapping = dict(zip(current_categories, updated_categories))
+
+        if len(set(updated_categories)) != len(updated_categories):
+            raise ValueError("New categories must be unique")
+
+        values = self._series_obj._series.to_list()
+        new_values = [mapping.get(value, value) for value in values]
+        index = (
+            list(self._series_obj._index)
+            if self._series_obj._index is not None
+            else None
+        )
+
+        pl_series = pl.Series(
+            name=self._series_obj.name or "",
+            values=new_values,
+        ).cast(pl.Categorical)
+        result = Series(pl_series, name=self._series_obj.name, index=index)
+        result._index_name = self._series_obj._index_name
+        result._categorical_order = list(updated_categories)
+
+        if inplace:
+            self._series_obj._series = result._series
+            self._series_obj._categorical_order = list(updated_categories)
+            return None
+        return result
+
+    def reorder_categories(self, new_categories: Any, inplace: bool = False) -> Any:
+        """Reorder categories according to the provided sequence."""
+
+        current_categories = self._categories_list()
+        new_order = list(new_categories)
+
+        if len(new_order) != len(current_categories):
+            raise ValueError("New categories must include all existing categories")
+        if len(set(new_order)) != len(new_order):
+            raise ValueError("New categories must be unique")
+        if set(new_order) != set(current_categories):
+            raise ValueError("New categories must match existing categories")
+
+        if inplace:
+            self._series_obj._categorical_order = list(new_order)
+            return None
+
+        result = self._series_obj.copy()
+        result._categorical_order = list(new_order)
+        return result
 
 
 class _StringAccessor:
@@ -6148,7 +6362,7 @@ class _StringAccessor:
                 "This should be available in Python standard library."
             ) from None
 
-    def translate(self, table: Dict[int, Any]) -> Series:
+    def translate(self, table: BuiltinDict[int, Any]) -> Series:
         """Translate characters using translation table."""
 
         def translate_str(s: Any) -> Any:
@@ -6421,7 +6635,9 @@ class _DatetimeAccessor:
         }
         return freq_map.get(freq, freq)
 
-    def _parse_freq_to_duration_kwargs(self, freq: str) -> Dict[str, int]:
+    def _parse_freq_to_duration_kwargs(
+        self, freq: BuiltinStr
+    ) -> BuiltinDict[BuiltinStr, int]:
         """Parse pandas frequency string to Polars duration kwargs."""
         freq_map = {
             "D": {"days": 1},
@@ -6604,3 +6820,129 @@ class _DatetimeAccessor:
             }
         )
         return ppd.DataFrame(result_df)
+
+
+class _SeriesRolling:
+    """Series rolling window helper supporting custom apply."""
+
+    def __init__(self, series: Series, window: int, **kwargs: Any) -> None:
+        self._series = series
+        self._window = window
+        self._kwargs = {k: v for k, v in kwargs.items() if k is not None}
+        min_periods = self._kwargs.pop("min_periods", None)
+        min_samples = self._kwargs.pop("min_samples", None)
+
+        if (
+            min_periods is not None
+            and min_samples is not None
+            and min_periods != min_samples
+        ):
+            raise ValueError(
+                "min_periods and min_samples must match when both provided"
+            )
+
+        base_min = min_samples if min_samples is not None else min_periods
+        self._min_periods = window if base_min is None else base_min
+
+        if not isinstance(self._min_periods, int):
+            raise TypeError("min_periods must be an integer")
+
+        if self._min_periods < 0:
+            raise ValueError("min_periods must be non-negative")
+
+    def _rolling_kwargs(self, rolling_callable: Any) -> BuiltinDict[BuiltinStr, Any]:
+        rolling_kwargs = dict(self._kwargs)
+
+        if "min_samples" in rolling_kwargs or "min_periods" in rolling_kwargs:
+            return rolling_kwargs
+
+        if _callable_accepts_argument(rolling_callable, "min_samples"):
+            rolling_kwargs["min_samples"] = self._min_periods
+        else:
+            rolling_kwargs["min_periods"] = self._min_periods
+
+        return rolling_kwargs
+
+    def _index_copy(self) -> BuiltinList[Any] | None:
+        return list(self._series._index) if self._series._index is not None else None
+
+    def _wrap_result(self, polars_series: pl.Series) -> Series:
+        return Series(polars_series, name=self._series.name, index=self._index_copy())
+
+    def mean(self) -> Series:
+        return self._wrap_result(
+            self._series._series.rolling_mean(
+                window_size=self._window,
+                **self._rolling_kwargs(self._series._series.rolling_mean),
+            )
+        )
+
+    def sum(self) -> Series:
+        return self._wrap_result(
+            self._series._series.rolling_sum(
+                window_size=self._window,
+                **self._rolling_kwargs(self._series._series.rolling_sum),
+            )
+        )
+
+    def std(self) -> Series:
+        return self._wrap_result(
+            self._series._series.rolling_std(
+                window_size=self._window,
+                **self._rolling_kwargs(self._series._series.rolling_std),
+            )
+        )
+
+    def max(self) -> Series:
+        return self._wrap_result(
+            self._series._series.rolling_max(
+                window_size=self._window,
+                **self._rolling_kwargs(self._series._series.rolling_max),
+            )
+        )
+
+    def min(self) -> Series:
+        return self._wrap_result(
+            self._series._series.rolling_min(
+                window_size=self._window,
+                **self._rolling_kwargs(self._series._series.rolling_min),
+            )
+        )
+
+    def apply(
+        self,
+        func: Callable[[BuiltinList[Any] | Series], Any],
+        raw: bool = False,
+        engine: str | None = None,
+        engine_kwargs: dict[str, Any] | None = None,
+        args: tuple[Any, ...] | None = None,
+        kwargs: dict[str, Any] | None = None,
+    ) -> Series:
+        """Apply custom rolling function to the Series."""
+
+        unused_engine = engine_kwargs  # Suppress unused variable warnings
+        _ = unused_engine
+
+        args = args or ()
+        kwargs = kwargs or {}
+
+        values = self._series.to_list()
+        results: BuiltinList[Any] = []
+
+        for end_idx in range(len(values)):
+            start_idx = max(0, end_idx + 1 - self._window)
+            window_values = values[start_idx : end_idx + 1]
+
+            if len(window_values) < self._min_periods:
+                results.append(None)
+                continue
+
+            if raw:
+                window_input: BuiltinList[Any] | Series = window_values
+            else:
+                window_input = Series(window_values, name=self._series.name)
+
+            result_value = func(window_input, *args, **kwargs)
+            results.append(result_value)
+
+        return Series(results, name=self._series.name, index=self._index_copy())

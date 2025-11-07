@@ -21,6 +21,9 @@ try:
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
 
+# Allow deselection via `-m "not requires_sqlalchemy"` when the dependency isn't present.
+pytestmark = pytest.mark.requires_sqlalchemy
+
 
 @pytest.fixture
 def sample_df():

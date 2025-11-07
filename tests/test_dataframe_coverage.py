@@ -35,7 +35,6 @@ class TestDataFrameAdvancedIndexing:
 
     def test_loc_with_boolean_array(self):
         """Test loc with boolean arrays."""
-        pytest.skip("Boolean array indexing with loc not yet implemented")
         df = ppd.DataFrame({"A": [1, 2, 3, 4], "B": [5, 6, 7, 8]})
 
         # Boolean indexing with loc
@@ -304,7 +303,6 @@ class TestDataFrameApplyAndMap:
 
     def test_apply_to_rows(self):
         """Test apply function to rows."""
-        pytest.skip("apply with axis=1 not yet supported")
         df = ppd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
 
         result = df.apply(lambda x: x.sum(), axis=1)
@@ -395,7 +393,6 @@ class TestDataFrameNullHandling:
 
     def test_fillna_with_method(self):
         """Test fillna with forward/backward fill."""
-        pytest.skip("fillna with method parameter not yet implemented")
         df = ppd.DataFrame({"A": [1, None, None, 4]})
 
         # Forward fill
@@ -437,7 +434,6 @@ class TestDataFrameDataTypes:
 
     def test_select_dtypes(self):
         """Test select_dtypes method."""
-        pytest.skip("select_dtypes not yet implemented")
         df = ppd.DataFrame(
             {
                 "int_col": [1, 2, 3],
@@ -446,13 +442,10 @@ class TestDataFrameDataTypes:
             }
         )
 
-        try:
-            numeric = df.select_dtypes(include=["number"])
-            assert "int_col" in numeric.columns
-            assert "float_col" in numeric.columns
-            assert "str_col" not in numeric.columns
-        except (NotImplementedError, AttributeError):
-            pytest.skip("select_dtypes not yet implemented")
+        numeric = df.select_dtypes(include=["number"])
+        assert "int_col" in numeric.columns
+        assert "float_col" in numeric.columns
+        assert "str_col" not in numeric.columns
 
 
 class TestDataFrameColumnOperations:
@@ -578,7 +571,6 @@ class TestDataFrameComparison:
 
     def test_comparison_operators(self):
         """Test comparison operators."""
-        pytest.skip("Comparison operators on DataFrame not yet implemented")
         df = ppd.DataFrame({"A": [1, 2, 3]})
 
         gt_result = df > 2
@@ -593,7 +585,6 @@ class TestDataFrameIterators:
 
     def test_iterrows(self):
         """Test iterrows iteration."""
-        pytest.skip("iterrows needs fixing - Series constructor issue")
         df = ppd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
 
         rows = list(df.iterrows())
@@ -810,7 +801,6 @@ class TestDataFrameArithmetic:
 
     def test_add_dataframes(self):
         """Test adding two DataFrames."""
-        pytest.skip("Arithmetic operators on DataFrame not yet implemented")
         df1 = ppd.DataFrame({"A": [1, 2, 3]})
         df2 = ppd.DataFrame({"A": [4, 5, 6]})
 
@@ -819,7 +809,6 @@ class TestDataFrameArithmetic:
 
     def test_multiply_scalar(self):
         """Test multiplying DataFrame by scalar."""
-        pytest.skip("Arithmetic operators on DataFrame not yet implemented")
         df = ppd.DataFrame({"A": [1, 2, 3]})
 
         result = df * 2
@@ -827,7 +816,6 @@ class TestDataFrameArithmetic:
 
     def test_divide_dataframes(self):
         """Test dividing DataFrames."""
-        pytest.skip("Arithmetic operators on DataFrame not yet implemented")
         df1 = ppd.DataFrame({"A": [10, 20, 30]})
         df2 = ppd.DataFrame({"A": [2, 4, 5]})
 

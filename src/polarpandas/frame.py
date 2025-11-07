@@ -27,6 +27,7 @@ Notes
 """
 
 import contextlib
+import operator
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -35,11 +36,15 @@ from typing import (
     Iterator,
     List,
     Literal,
+    Mapping,
     Optional,
+    Sequence,
     Tuple,
     Union,
+    cast,
 )
 
+import numpy as np
 import polars as pl
 
 from polarpandas._exceptions import (
@@ -686,6 +691,118 @@ class DataFrame:
         """Return the number of rows in the DataFrame."""
         return len(self._df)
 
+    def _ensure_column_alignment(self, other: "DataFrame") -> None:
+        if list(self.columns) != list(other.columns):
+            raise ValueError("DataFrame columns must match for element-wise operations")
+
+    def _preserve_binary_index(
+        self, result: "DataFrame", other: Any, *, reverse: bool = False
+    ) -> "DataFrame":
+        if isinstance(other, DataFrame):
+            left_index = other._index if reverse else self._index
+            right_index = self._index if reverse else other._index
+            if left_index is not None and right_index == left_index:
+                result._index = list(left_index)
+                result._index_name = other._index_name if reverse else self._index_name
+        elif self._index is not None:
+            result._index = list(self._index)
+            result._index_name = self._index_name
+        return result
+
+    def _is_numeric_scalar(self, value: Any) -> bool:
+        return isinstance(value, (int, float, complex, bool, np.number))
+
+    def _binary_operation(
+        self,
+        other: Any,
+        op_name: str,
+        *,
+        reverse: bool = False,
+        numeric_only: bool = False,
+    ) -> "DataFrame":
+        method_name = f"__r{op_name}__" if reverse else f"__{op_name}__"
+
+        if isinstance(other, DataFrame):
+            self._ensure_column_alignment(other)
+            target = getattr(self._df, method_name, None)
+            try:
+                if target is None:
+                    raise AttributeError
+                result_pl = target(other._df)
+            except (AttributeError, TypeError):
+                pyop = getattr(operator, op_name)
+                result_pl = (
+                    pyop(other._df, self._df) if reverse else pyop(self._df, other._df)
+                )
+            result_df = DataFrame(result_pl)
+        else:
+            if numeric_only and not self._is_numeric_scalar(other):
+                raise TypeError(
+                    f"Unsupported operand type(s) for {op_name}: 'DataFrame' and '{type(other).__name__}'"
+                )
+            target = getattr(self._df, method_name, None)
+            try:
+                if target is None:
+                    raise AttributeError
+                result_pl = target(other)
+            except (AttributeError, TypeError):
+                pyop = getattr(operator, op_name)
+                result_pl = pyop(other, self._df) if reverse else pyop(self._df, other)
+            result_df = DataFrame(result_pl)
+
+        return self._preserve_binary_index(result_df, other, reverse=reverse)
+
+    # ------------------------------------------------------------------
+    # Arithmetic operators
+    # ------------------------------------------------------------------
+    def __add__(self, other: Any) -> "DataFrame":
+        return self._binary_operation(other, "add", numeric_only=True)
+
+    def __radd__(self, other: Any) -> "DataFrame":
+        return self._binary_operation(other, "add", reverse=True, numeric_only=True)
+
+    def __sub__(self, other: Any) -> "DataFrame":
+        return self._binary_operation(other, "sub", numeric_only=True)
+
+    def __rsub__(self, other: Any) -> "DataFrame":
+        return self._binary_operation(other, "sub", reverse=True, numeric_only=True)
+
+    def __mul__(self, other: Any) -> "DataFrame":
+        return self._binary_operation(other, "mul", numeric_only=True)
+
+    def __rmul__(self, other: Any) -> "DataFrame":
+        return self._binary_operation(other, "mul", reverse=True, numeric_only=True)
+
+    def __truediv__(self, other: Any) -> "DataFrame":
+        return self._binary_operation(other, "truediv", numeric_only=True)
+
+    def __rtruediv__(self, other: Any) -> "DataFrame":
+        return self._binary_operation(other, "truediv", reverse=True, numeric_only=True)
+
+    # ------------------------------------------------------------------
+    # Comparison operators
+    # ------------------------------------------------------------------
+    def _comparison_operation(self, other: Any, op_name: str) -> "DataFrame":
+        return self._binary_operation(other, op_name)
+
+    def __eq__(self, other: Any) -> "DataFrame":  # type: ignore[override]
+        return self._comparison_operation(other, "eq")
+
+    def __ne__(self, other: Any) -> "DataFrame":  # type: ignore[override]
+        return self._comparison_operation(other, "ne")
+
+    def __gt__(self, other: Any) -> "DataFrame":
+        return self._comparison_operation(other, "gt")
+
+    def __ge__(self, other: Any) -> "DataFrame":
+        return self._comparison_operation(other, "ge")
+
+    def __lt__(self, other: Any) -> "DataFrame":
+        return self._comparison_operation(other, "lt")
+
+    def __le__(self, other: Any) -> "DataFrame":
+        return self._comparison_operation(other, "le")
+
     def __getitem__(self, key: Union[str, List[str]]) -> Union["DataFrame", "Series"]:
         """
         Access a column or subset of columns from the DataFrame.
@@ -959,6 +1076,11 @@ class DataFrame:
 
         # Filter out non-existent columns to match pandas behavior
         # pandas ignores non-existent columns in rename operations
+        if not isinstance(rename_dict, Mapping):
+            raise TypeError(
+                "'columns' must be a mapping of {old_name: new_name} pairs when renaming"
+            )
+
         existing_columns = set(self._df.columns)
         filtered_rename_dict = {
             old: new for old, new in rename_dict.items() if old in existing_columns
@@ -1034,34 +1156,42 @@ class DataFrame:
             return DataFrame(result_df)
 
     def fillna(
-        self, value: Any, inplace: bool = False, **kwargs: Any
+        self,
+        value: Any = None,
+        inplace: bool = False,
+        method: Optional[str] = None,
+        limit: Optional[int] = None,
+        **kwargs: Any,
     ) -> Optional["DataFrame"]:
-        """
-        Fill null values.
-
-        Parameters
-        ----------
-        value : scalar
-            Value to fill nulls with
-        inplace : bool, default False
-            If True, modify DataFrame in place and return None.
-            If False, return a new DataFrame.
-        **kwargs : additional arguments
-            Additional arguments passed to Polars fill_null()
-
-        Returns
-        -------
-        DataFrame or None
-            DataFrame with nulls filled, or None if inplace=True
-        """
-        # Polars uses fill_null() instead of fillna()
-        result_df = self._df.fill_null(value, **kwargs)
+        """Fill null values."""
+        if method is not None:
+            strategy_map: Dict[str, Literal["forward", "backward"]] = {
+                "ffill": "forward",
+                "pad": "forward",
+                "bfill": "backward",
+                "backfill": "backward",
+            }
+            if method not in strategy_map:
+                raise ValueError(
+                    "method must be one of {'ffill', 'pad', 'bfill', 'backfill'}"
+                )
+            strategy = strategy_map[method]
+            result_df = self._df.fill_null(
+                strategy=strategy,
+                limit=limit,
+                **kwargs,
+            )
+        else:
+            if value is None:
+                raise ValueError(
+                    "fillna requires a 'value' when no method is specified"
+                )
+            result_df = self._df.fill_null(value, **kwargs)
 
         if inplace:
             self._df = result_df
             return None
-        else:
-            return DataFrame(result_df)
+        return DataFrame(result_df)
 
     def astype(
         self, dtype: Union[Dict[str, Any], Any], errors: str = "raise", **kwargs: Any
@@ -2557,6 +2687,20 @@ class DataFrame:
         --------
         _GroupBy : The GroupBy object returned by this method
         """
+        missing_columns: List[str] = []
+        if isinstance(by, str):
+            missing_columns = [by] if by not in self._df.columns else []
+        elif isinstance(by, Sequence):
+            missing_columns = [
+                col
+                for col in by
+                if isinstance(col, str) and col not in self._df.columns
+            ]
+
+        if missing_columns:
+            missing_display = ", ".join(missing_columns)
+            raise KeyError(f"Columns not found in DataFrame: {missing_display}")
+
         # Handle level parameter for MultiIndex
         if level is not None and by is None:
             # Group by index level(s)
@@ -2652,16 +2796,23 @@ class DataFrame:
         DataFrame
             Melted DataFrame
         """
-        # Polars uses unpivot() with 'index' instead of 'id_vars'
-        # and 'on' instead of 'value_vars'
-        unpivot_kwargs = {}
-        if id_vars is not None:
-            unpivot_kwargs["index"] = id_vars
-        if value_vars is not None:
-            unpivot_kwargs["on"] = value_vars
-        unpivot_kwargs.update(kwargs)
+        var_name = kwargs.pop("var_name", "variable")
+        value_name = kwargs.pop("value_name", "value")
+        unpivot_kwargs = kwargs
 
-        return DataFrame(self._df.unpivot(**unpivot_kwargs))  # type: ignore[arg-type]
+        result = cast("Any", self._df).unpivot(
+            index=id_vars,
+            on=value_vars,
+            **unpivot_kwargs,
+        )
+        rename_map = {}
+        if var_name != "variable":
+            rename_map["variable"] = var_name
+        if value_name != "value":
+            rename_map["value"] = value_name
+        if rename_map:
+            result = result.rename(rename_map)
+        return DataFrame(result)
 
     def merge(self, other: "DataFrame", *args: Any, **kwargs: Any) -> "DataFrame":
         """
@@ -6240,41 +6391,29 @@ class DataFrame:
         inplace: bool = False,
         **kwargs: Any,
     ) -> Optional["DataFrame"]:
-        """
-        Query the columns of a DataFrame with a boolean expression.
+        """Query the columns of a DataFrame with a boolean expression."""
+        from polarpandas.series import Series
 
-        Parameters
-        ----------
-        expr : str
-            The query string to evaluate.
-        inplace : bool, default False
-            Whether to modify the DataFrame in place.
-        **kwargs
-            Additional arguments (not used, for pandas compatibility).
-
-        Returns
-        -------
-        DataFrame or None
-            DataFrame resulting from the query, or None if inplace=True.
-        """
-        # Simple implementation using Polars filter with column references
-        # For full pandas query() support, would need expression parser
-        # This is a basic implementation that handles simple column comparisons
+        expr_namespace = {col: pl.col(col) for col in self.columns}
         try:
-            # Try to evaluate as Python expression with column access
-            # This is a simplified version - full implementation would need parser
-            filtered_df = self._df.filter(
-                pl.col(expr.split()[0]) if " " in expr else pl.col(expr)
+            filter_expr = eval(expr, {"pl": pl, "__builtins__": {}}, expr_namespace)
+        except Exception as exc:
+            raise ValueError(f"Unable to evaluate query expression: {expr}") from exc
+
+        if isinstance(filter_expr, Series):
+            filter_expr = filter_expr._series
+
+        if not isinstance(filter_expr, (pl.Series, pl.Expr)):
+            raise TypeError(
+                "Query expressions must evaluate to a Polars expression or boolean Series"
             )
-        except Exception:
-            # Fallback: return original DataFrame
-            filtered_df = self._df
+
+        filtered_df = self._df.filter(filter_expr)
 
         if inplace:
             self._df = filtered_df
             return None
-        else:
-            return DataFrame(filtered_df)
+        return DataFrame(filtered_df)
 
     def to_dict(
         self,
@@ -6329,45 +6468,53 @@ class DataFrame:
         exclude: Optional[Union[Any, List[Any]]] = None,
         **kwargs: Any,
     ) -> "DataFrame":
-        """
-        Return a subset of the DataFrame's columns based on the column dtypes.
+        """Return a subset of columns filtered by dtype."""
+        include_list: Optional[List[Any]] = (
+            include
+            if isinstance(include, list)
+            else [include]
+            if include is not None
+            else None
+        )
+        exclude_list: Optional[List[Any]] = (
+            exclude
+            if isinstance(exclude, list)
+            else [exclude]
+            if exclude is not None
+            else None
+        )
 
-        Parameters
-        ----------
-        include : scalar or list-like, optional
-            A selection of dtypes to include.
-        exclude : scalar or list-like, optional
-            A selection of dtypes to exclude.
-        **kwargs
-            Additional arguments (not used, for pandas compatibility).
+        def _matches(dtype: pl.DataType, selector: Any) -> bool:
+            if isinstance(selector, str):
+                selector_lower = selector.lower()
+                if selector_lower == "number":
+                    return dtype.is_numeric()
+                if selector_lower == "float":
+                    return dtype.is_float()
+                if selector_lower in {"int", "integer"}:
+                    return dtype.is_integer()
+                if selector_lower in {"bool", "boolean"}:
+                    return dtype == pl.Boolean
+                if selector_lower in {"object", "string", "str"}:
+                    return dtype == pl.Utf8
+            return dtype == selector or str(dtype) == str(selector)
 
-        Returns
-        -------
-        DataFrame
-            DataFrame with selected columns.
-        """
-        cols_to_keep = []
-
+        cols_to_keep: List[str] = []
         for col in self.columns:
             dtype = self._df[col].dtype
-            include_col = True
+            include_match = True
+            if include_list is not None:
+                include_match = any(_matches(dtype, inc) for inc in include_list)
 
-            if include is not None:
-                include_list = include if isinstance(include, list) else [include]
-                include_col = any(
-                    dtype == include_dtype or str(dtype) == str(include_dtype)
-                    for include_dtype in include_list
-                )
+            if not include_match:
+                continue
 
-            if exclude is not None and include_col:
-                exclude_list = exclude if isinstance(exclude, list) else [exclude]
-                include_col = not any(
-                    dtype == exclude_dtype or str(dtype) == str(exclude_dtype)
-                    for exclude_dtype in exclude_list
-                )
+            if exclude_list is not None and any(
+                _matches(dtype, exc) for exc in exclude_list
+            ):
+                continue
 
-            if include_col:
-                cols_to_keep.append(col)
+            cols_to_keep.append(col)
 
         return DataFrame(self._df.select(cols_to_keep))
 
@@ -7896,33 +8043,22 @@ class DataFrame:
         return pandas_df
 
     def iterrows(self) -> Iterator[Tuple[Any, "Series"]]:
-        """
-        Iterate over DataFrame rows as (index, Series) pairs.
-
-        Yields
-        ------
-        index : label
-            The index of the row.
-        data : Series
-            The data of the row as a Series.
-
-        Notes
-        -----
-        This method is slow and should be avoided if possible. Consider using
-        itertuples() or vectorized operations instead.
-        """
+        """Iterate over DataFrame rows as (index, Series) pairs."""
         from polarpandas.series import Series
 
         rows = self._df.iter_rows(named=True)
-        for i, row in enumerate(rows):
-            # Convert row dict to Series
-            row_series = Series(pl.Series(list(row.values())))
+        column_labels = list(self.columns)
 
-            # Get index
+        for i, row in enumerate(rows):
+            values = [row[col] for col in column_labels]
+            row_series = Series(values, index=column_labels)
+
             if self._index is not None and i < len(self._index):
                 idx = self._index[i]
+                row_series.name = idx
             else:
                 idx = i
+                row_series.name = idx
 
             yield (idx, row_series)
 
@@ -8470,38 +8606,36 @@ class DataFrame:
         aggfunc: str = "mean",
         **kwargs: Any,
     ) -> "DataFrame":
-        """
-        Create a pivot table.
+        """Create a pivot table with common aggregation functions."""
+        if callable(aggfunc):
+            raise NotImplementedError(
+                "Callable aggfunc is not yet supported in pivot_table; use Polars expressions instead."
+            )
 
-        Parameters
-        ----------
-        values : str
-            Column to aggregate
-        index : str
-            Column to use as index
-        columns : str
-            Column to use as columns
-        aggfunc : str, default "mean"
-            Aggregation function
-        **kwargs
-            Additional arguments
+        aggfunc_normalized = (aggfunc or "mean").lower()
+        aggregate_map = {
+            "mean": "mean",
+            "sum": "sum",
+            "min": "min",
+            "max": "max",
+            "count": "len",
+            "median": "median",
+        }
 
-        Returns
-        -------
-        DataFrame
-            Pivot table
+        if aggfunc_normalized not in aggregate_map:
+            raise ValueError(
+                "aggfunc must be one of {'mean', 'sum', 'min', 'max', 'count', 'median'}"
+            )
 
-        Examples
-        --------
-        >>> df = ppd.DataFrame({
-        ...     "A": ["foo", "foo", "bar", "bar"],
-        ...     "B": ["one", "two", "one", "two"],
-        ...     "C": [1, 2, 3, 4]
-        ... })
-        >>> result = df.pivot_table(values="C", index="A", columns="B")
-        """
-        # Use the existing pivot method
-        return self.pivot(index=index, columns=columns, values=values)
+        pivot_df: Any = self._df
+        result = pivot_df.pivot(
+            values=values,
+            index=index,
+            columns=columns,
+            aggregate_function=aggregate_map[aggfunc_normalized],
+            **kwargs,
+        )
+        return DataFrame(result)
 
     def get_dummies(self, **kwargs: Any) -> "DataFrame":
         """
@@ -8700,39 +8834,51 @@ class DataFrame:
     def apply(
         self, func: Callable[..., Any], axis: int = 0
     ) -> Union["Series", "DataFrame"]:
-        """
-        Apply a function along an axis.
-
-        Parameters
-        ----------
-        func : function
-            Function to apply
-        axis : {0, 1}, default 0
-            0 for columns, 1 for rows
-
-        Returns
-        -------
-        Series or DataFrame
-            Result of applying function
-        """
+        """Apply a function along an axis."""
         from polarpandas.series import Series
 
         if axis == 0:
-            # Apply to each column
             results = {}
             for col in self.columns:
                 result = func(self._df[col])
                 results[col] = result
             return Series(list(results.values()), name="apply_result")
-        else:
-            # Apply to each row - more complex
-            raise NotImplementedError(
-                "apply() with axis=1 (row-wise) is not yet implemented.\n"
-                "Workarounds:\n"
-                "  - Use axis=0 (column-wise, default) for column operations\n"
-                "  - Use applymap() for element-wise operations\n"
-                "  - Use Polars expressions: df.select([pl.col('col1').map_elements(func)])"
-            )
+
+        if axis not in (1, "columns"):
+            raise ValueError("axis must be 0 or 1 when calling DataFrame.apply")
+
+        row_results: List[Any] = []
+        row_index: List[Any] = (
+            list(self._index) if self._index is not None else list(range(len(self._df)))
+        )
+
+        column_names = self.columns
+
+        for position, row_values in enumerate(self._df.iter_rows(named=True)):
+            values = [row_values[col] for col in column_names]
+            row_series = Series(values, index=column_names)
+            if position < len(row_index):
+                row_series.name = row_index[position]
+            else:
+                row_series.name = position
+
+            result = func(row_series)
+            row_results.append(result)
+
+        if not row_results:
+            return Series([], index=row_index)
+
+        first_result = row_results[0]
+        if isinstance(first_result, Series):
+            typed_results = cast("List[Series]", row_results)
+            data = {
+                col: [res[col] for res in typed_results] for col in first_result.index
+            }
+            result_df = DataFrame(data)
+            result_df._index = row_index[: len(result_df._df)]
+            return result_df
+
+        return Series(row_results, index=row_index[: len(row_results)])
 
     def applymap(self, func: Callable[..., Any]) -> "DataFrame":
         """
@@ -11874,33 +12020,54 @@ class _LocIndexer:
         polars_df = self._df._df
         import polars as pl
 
-        # Handle boolean indexing with pandas Series
-        if hasattr(row_key, "dtype") and str(row_key.dtype) == "bool":
-            # Convert pandas Series mask to Polars expression
-            mask_values = row_key.tolist()
-            mask_series = pl.Series("mask", mask_values)
+        from polarpandas.series import Series as PolarPandasSeries
+
+        mask_series: Optional[pl.Series] = None
+        if (
+            isinstance(row_key, PolarPandasSeries)
+            and row_key._series.dtype == pl.Boolean
+        ):
+            mask_series = row_key._series
+        elif hasattr(row_key, "dtype") and str(row_key.dtype) == "bool":
+            mask_series = pl.Series("mask", list(row_key))
+        elif (
+            isinstance(row_key, list)
+            and row_key
+            and all(isinstance(item, (bool, np.bool_)) for item in row_key)
+        ):
+            mask_series = pl.Series("mask", row_key)
+
+        if mask_series is not None:
+            mask_values = mask_series.to_list()
             selected_df = polars_df.filter(mask_series)
 
-            # Select columns if specified
-            if col_key is not None:
+            if col_key is not None and not (
+                isinstance(col_key, slice) and col_key == slice(None)
+            ):
                 if isinstance(col_key, str):
-                    # Single column - return as Series
                     from polarpandas.series import Series
 
-                    return Series(selected_df[col_key])
+                    result_index: Optional[List[Any]]
+                    if self._df._index is not None:
+                        selected_indices = [
+                            i for i, val in enumerate(mask_values) if val
+                        ]
+                        result_index = [self._df._index[i] for i in selected_indices]
+                    else:
+                        result_index = [i for i, val in enumerate(mask_values) if val]
+                    return Series(
+                        selected_df[col_key], index=result_index, name=col_key
+                    )
                 else:
-                    # Multiple columns - return as DataFrame
                     selected_df = selected_df[col_key]
 
             result = DataFrame(selected_df)
-            # Preserve index for selected rows
             if self._df._index is not None:
                 selected_indices = [i for i, val in enumerate(mask_values) if val]
                 result._index = [self._df._index[i] for i in selected_indices]
+                result._index_name = self._df._index_name
             else:
-                # No stored index, but we need to preserve the original row positions
-                selected_indices = [i for i, val in enumerate(mask_values) if val]
-                result._index = selected_indices
+                result._index = [i for i, val in enumerate(mask_values) if val]
             return result
 
         # Use Polars for row/column selection - limited label-based support
@@ -13492,6 +13659,57 @@ class _RollingGroupBy:
     def min(self) -> "DataFrame":
         """Calculate rolling minimum."""
         return self._apply_rolling("min")
+
+    def apply(
+        self,
+        func: Callable[[Union[List[Any], Any]], Any],
+        raw: bool = False,
+        engine: Optional[str] = None,
+        engine_kwargs: Optional[Dict[str, Any]] = None,
+        args: Optional[Tuple[Any, ...]] = None,
+        kwargs: Optional[Dict[str, Any]] = None,
+    ) -> "DataFrame":
+        """Apply a custom function over each rolling window."""
+        unused_engine = engine, engine_kwargs  # present for pandas compatibility
+        _ = unused_engine
+
+        args = args or ()
+        kwargs = kwargs or {}
+        result_cols = []
+        polars_df = self._df._df
+        for col in self._df.columns:
+            column_series = polars_df[col]
+            col_name = col
+
+            def rolling_function(  # pragma: no cover - small wrapper
+                window_series: pl.Series, *, _col: str = col_name
+            ) -> Any:
+                window_values = window_series.to_list()
+                if raw:
+                    window_input: Union[List[Any], Any] = window_values
+                else:
+                    from polarpandas.series import Series
+
+                    window_input = Series(window_values, name=_col)
+                return func(window_input, *args, **kwargs)
+
+            rolling_kwargs: Dict[str, Any] = {}
+            if "weights" in self._kwargs:
+                rolling_kwargs["weights"] = self._kwargs["weights"]
+            if "center" in self._kwargs:
+                rolling_kwargs["center"] = self._kwargs["center"]
+            if "min_periods" in self._kwargs:
+                rolling_kwargs["min_samples"] = self._kwargs["min_periods"]
+
+            applied = column_series.rolling_map(
+                rolling_function,
+                window_size=self._window,
+                **rolling_kwargs,
+            )
+            result_cols.append(applied.alias(col))
+
+        result_df = polars_df.select(result_cols)
+        return DataFrame(result_df)
 
 
 class _GroupBy:

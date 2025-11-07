@@ -129,28 +129,38 @@ class TestSchemaConversionUtility:
         with pytest.raises(ValueError):
             convert_schema_to_polars(schema)
 
-    @pytest.mark.skipif(
-        not hasattr(__import__("sys").modules.get("pandas", None), "Int64Dtype"),
-        reason="pandas optional dependency not available",
-    )
     def test_pandas_dtype_objects(self):
-        """Test conversion of pandas dtype objects."""
-        try:
-            import pandas as pd
+        """Test conversion of objects that mimic pandas dtype classes."""
 
-            schema = {
-                "col1": pd.Int64Dtype(),
-                "col2": pd.Float64Dtype(),
-                "col3": pd.StringDtype(),
-            }
-            result = convert_schema_to_polars(schema)
+        class _FakePandasInt64:
+            __module__ = "pandas.core.dtypes.base"
 
-            assert result is not None
-            assert result["col1"] == pl.Int64
-            assert result["col2"] == pl.Float64
-            assert result["col3"] == pl.Utf8
-        except ImportError:
-            pytest.skip("pandas not available")
+            def __str__(self) -> str:  # pragma: no cover - simple representation
+                return "Int64"
+
+        class _FakePandasFloat64:
+            __module__ = "pandas.core.dtypes.base"
+
+            def __str__(self) -> str:
+                return "Float64"
+
+        class _FakePandasString:
+            __module__ = "pandas.core.dtypes.base"
+
+            def __str__(self) -> str:
+                return "String"
+
+        schema = {
+            "col1": _FakePandasInt64(),
+            "col2": _FakePandasFloat64(),
+            "col3": _FakePandasString(),
+        }
+        result = convert_schema_to_polars(schema)
+
+        assert result is not None
+        assert result["col1"] == pl.Int64
+        assert result["col2"] == pl.Float64
+        assert result["col3"] == pl.Utf8
 
     def test_more_numpy_dtype_variations(self):
         """Test more NumPy dtype variations."""

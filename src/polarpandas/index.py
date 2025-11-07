@@ -28,6 +28,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
     Optional,
@@ -1472,7 +1473,7 @@ class MultiIndex(Index):
     @classmethod
     def from_tuples(
         cls,
-        tuples: List[Tuple[Any, ...]],
+        tuples: Iterable[Tuple[Any, ...]],
         names: Optional[Union[List[Optional[str]], Tuple[Optional[str], ...]]] = None,
         sortorder: Optional[int] = None,
     ) -> "MultiIndex":
@@ -1498,17 +1499,30 @@ class MultiIndex(Index):
         >>> tuples = [('bar', 'one'), ('bar', 'two'), ('baz', 'one'), ('baz', 'two')]
         >>> idx = MultiIndex.from_tuples(tuples, names=['first', 'second'])
         """
-        if not tuples:
+        if isinstance(tuples, (str, bytes)):  # type: ignore[unreachable]
+            raise TypeError("tuples argument must be an iterable of tuple objects")
+
+        if not isinstance(tuples, Iterable):
+            raise TypeError("tuples argument must be iterable")
+
+        tuples_list = list(tuples)
+
+        if not tuples_list:
             return cls(levels=[], codes=[], names=names or [])
 
+        if not all(isinstance(item, tuple) for item in tuples_list):
+            raise TypeError(
+                "All elements passed to from_tuples must be tuple instances"
+            )
+
         # Check all tuples have same length
-        lengths = [len(t) for t in tuples]
+        lengths = [len(t) for t in tuples_list]
         if len(set(lengths)) > 1:
             raise ValueError("All tuples must have the same length")
 
         # Build levels and codes from tuples
         instance = cls()
-        levels, codes = instance._build_levels_codes_from_tuples(tuples)
+        levels, codes = instance._build_levels_codes_from_tuples(tuples_list)
         return cls(levels=levels, codes=codes, names=names, sortorder=sortorder)
 
     @classmethod

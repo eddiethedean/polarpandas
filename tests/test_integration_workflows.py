@@ -6,7 +6,6 @@ multiple operations to ensure they work together correctly.
 """
 
 import polars as pl
-import pytest
 
 import polarpandas as ppd
 
@@ -379,7 +378,6 @@ class TestJoinAndAggregateWorkflow:
 class TestReshapeAnalyzeWorkflow:
     """Tests for reshape and analyze workflows."""
 
-    @pytest.mark.skip(reason="melt() doesn't support var_name parameter yet")
     def test_wide_to_long_analysis_workflow(self):
         """Test converting wide to long format for analysis."""
         df = ppd.DataFrame(
@@ -524,7 +522,6 @@ class TestColumnRenameRearrangeWorkflow:
 class TestChainedOperationsWorkflow:
     """Tests for method chaining workflows."""
 
-    @pytest.mark.skip(reason="Boolean filtering inconsistency in test environment")
     def test_method_chaining_workflow(self):
         """Test chaining multiple operations."""
         df = ppd.DataFrame({"A": [1, 2, 3, 4, 5], "B": [10, 20, 30, 40, 50]})
@@ -619,3 +616,38 @@ class TestParquetRoundTrip:
             assert len(df_read) == 3
         finally:
             os.unlink(parquet_path)
+
+
+class TestIoDatetimeWorkflow:
+    """Integration workflow covering IO, datetime conversion, and LazyFrame."""
+
+    def test_csv_datetime_lazy_index_roundtrip(self, tmp_path):
+        csv_path = tmp_path / "events.csv"
+        source = ppd.DataFrame(
+            {
+                "event_id": [1, 2, 3],
+                "event_time": [
+                    "2023-01-01 09:00:00",
+                    "2023-01-02 10:15:00",
+                    "2023-01-03 12:30:00",
+                ],
+                "event_value": [5, 15, 25],
+            }
+        )
+        source.to_csv(csv_path, index=False)
+
+        eager = ppd.read_csv(str(csv_path))
+        eager_time = ppd.to_datetime(eager["event_time"].to_list())
+        eager["event_time"] = eager_time["datetime"]
+        eager = eager.set_index("event_id")
+
+        assert eager._index == [1, 2, 3]
+
+        lazy = ppd.scan_csv(str(csv_path), dtype={"event_id": "int64"})
+        filtered_lazy = lazy.filter(pl.col("event_value") >= 15).select(
+            ["event_id", "event_value"]
+        )
+        filtered = filtered_lazy.collect().set_index("event_id")
+
+        joined = eager.loc[filtered.index.tolist()]
+        assert joined["event_value"].to_list() == filtered["event_value"].to_list()

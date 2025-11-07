@@ -1,14 +1,11 @@
-"""
-Test enhanced Series methods with pandas compatibility.
+"""Enhanced Series method tests without pandas dependency."""
 
-All tests compare polarpandas output against actual pandas output
-to ensure 100% compatibility.
-"""
+from __future__ import annotations
 
-import pandas as pd
 import pytest
 
 import polarpandas as ppd
+from tests.test_helpers import assert_series_equal
 
 
 class TestSeriesComparison:
@@ -22,63 +19,46 @@ class TestSeriesComparison:
 
     def test_gt_comparison(self):
         """Test greater than comparison."""
-        pd_result = pd.Series(self.data) > 3
-        ppd_result = ppd.Series(self.data) > 3
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [value > 3 for value in self.data]
+        result = ppd.Series(self.data) > 3
+        assert_series_equal(result, expected)
 
     def test_lt_comparison(self):
         """Test less than comparison."""
-        pd_result = pd.Series(self.data) < 3
-        ppd_result = ppd.Series(self.data) < 3
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [value < 3 for value in self.data]
+        result = ppd.Series(self.data) < 3
+        assert_series_equal(result, expected)
 
     def test_ge_comparison(self):
         """Test greater than or equal comparison."""
-        pd_result = pd.Series(self.data) >= 3
-        ppd_result = ppd.Series(self.data) >= 3
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [value >= 3 for value in self.data]
+        result = ppd.Series(self.data) >= 3
+        assert_series_equal(result, expected)
 
     def test_le_comparison(self):
         """Test less than or equal comparison."""
-        pd_result = pd.Series(self.data) <= 3
-        ppd_result = ppd.Series(self.data) <= 3
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [value <= 3 for value in self.data]
+        result = ppd.Series(self.data) <= 3
+        assert_series_equal(result, expected)
 
     def test_eq_comparison(self):
         """Test equal comparison."""
-        pd_result = pd.Series(self.data) == 3
-        ppd_result = ppd.Series(self.data) == 3
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [value == 3 for value in self.data]
+        result = ppd.Series(self.data) == 3
+        assert_series_equal(result, expected)
 
     def test_ne_comparison(self):
         """Test not equal comparison."""
-        pd_result = pd.Series(self.data) != 3
-        ppd_result = ppd.Series(self.data) != 3
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [value != 3 for value in self.data]
+        result = ppd.Series(self.data) != 3
+        assert_series_equal(result, expected)
 
     def test_series_comparison(self):
         """Test Series to Series comparison."""
         other_data = [2, 3, 4, 5, 6]
-        pd_other = pd.Series(other_data)
-        ppd_other = ppd.Series(other_data)
-
-        pd_result = pd.Series(self.data) > pd_other
-        ppd_result = ppd.Series(self.data) > ppd_other
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [a > b for a, b in zip(self.data, other_data)]
+        result = ppd.Series(self.data) > ppd.Series(other_data)
+        assert_series_equal(result, expected)
 
 
 class TestSeriesMethods:
@@ -92,47 +72,37 @@ class TestSeriesMethods:
 
     def test_between_basic(self):
         """Test between method."""
-        pd_result = pd.Series(self.data).between(2, 4)
-        ppd_result = ppd.Series(self.data).between(2, 4)
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [2 <= value <= 4 for value in self.data]
+        result = ppd.Series(self.data).between(2, 4)
+        assert_series_equal(result, expected)
 
     def test_series_between_inclusive_both(self):
         """Test between with inclusive='both'."""
         # Lines 321-322: inclusive == "both"
-        pd_result = pd.Series(self.data).between(2, 4, inclusive="both")
-        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="both")
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [2 <= value <= 4 for value in self.data]
+        result = ppd.Series(self.data).between(2, 4, inclusive="both")
+        assert_series_equal(result, expected)
 
     def test_series_between_inclusive_neither(self):
         """Test between with inclusive='neither'."""
         # Lines 323-324: inclusive == "neither"
-        pd_result = pd.Series(self.data).between(2, 4, inclusive="neither")
-        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="neither")
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [2 < value < 4 for value in self.data]
+        result = ppd.Series(self.data).between(2, 4, inclusive="neither")
+        assert_series_equal(result, expected)
 
     def test_series_between_inclusive_left(self):
         """Test between with inclusive='left'."""
         # Lines 325-326: inclusive == "left"
-        pd_result = pd.Series(self.data).between(2, 4, inclusive="left")
-        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="left")
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [2 <= value < 4 for value in self.data]
+        result = ppd.Series(self.data).between(2, 4, inclusive="left")
+        assert_series_equal(result, expected)
 
     def test_series_between_inclusive_right(self):
         """Test between with inclusive='right'."""
         # Lines 327-328: inclusive == "right"
-        pd_result = pd.Series(self.data).between(2, 4, inclusive="right")
-        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="right")
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [2 < value <= 4 for value in self.data]
+        result = ppd.Series(self.data).between(2, 4, inclusive="right")
+        assert_series_equal(result, expected)
 
     def test_series_between_invalid_inclusive_raises_error(self):
         """Test between raises error for invalid inclusive parameter."""
@@ -144,16 +114,8 @@ class TestSeriesMethods:
     def test_series_between_empty_series(self):
         """Test between with empty Series."""
         # Lines 316-317: Empty series handling
-        import numpy as np
-
-        pd_empty = pd.Series([], dtype=np.float64)
-        ppd_empty = ppd.Series([], dtype=float)
-
-        pd_result = pd_empty.between(2, 4)
-        ppd_result = ppd_empty.between(2, 4)
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        result = ppd.Series([], dtype=float).between(2, 4)
+        assert result.to_list() == []
 
     def test_series_arithmetic_with_nulls(self):
         """Test arithmetic operations with null values."""
@@ -187,170 +149,97 @@ class TestSeriesMethods:
     def test_between_inclusive(self):
         """Test between with different inclusive options."""
         # Test 'neither'
-        pd_result = pd.Series(self.data).between(2, 4, inclusive="neither")
-        ppd_result = ppd.Series(self.data).between(2, 4, inclusive="neither")
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [2 < value < 4 for value in self.data]
+        result = ppd.Series(self.data).between(2, 4, inclusive="neither")
+        assert_series_equal(result, expected)
 
     def test_clip_basic(self):
         """Test clip method."""
-        pd_result = pd.Series(self.data).clip(lower=2, upper=4)
-        ppd_result = ppd.Series(self.data).clip(lower=2, upper=4)
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [min(max(value, 2), 4) for value in self.data]
+        result = ppd.Series(self.data).clip(lower=2, upper=4)
+        assert_series_equal(result, expected)
 
     def test_clip_lower_only(self):
         """Test clip with only lower bound."""
-        pd_result = pd.Series(self.data).clip(lower=3)
-        ppd_result = ppd.Series(self.data).clip(lower=3)
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [max(value, 3) for value in self.data]
+        result = ppd.Series(self.data).clip(lower=3)
+        assert_series_equal(result, expected)
 
     def test_clip_upper_only(self):
         """Test clip with only upper bound."""
-        pd_result = pd.Series(self.data).clip(upper=3)
-        ppd_result = ppd.Series(self.data).clip(upper=3)
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [min(value, 3) for value in self.data]
+        result = ppd.Series(self.data).clip(upper=3)
+        assert_series_equal(result, expected)
 
     def test_rank_basic(self):
         """Test rank method."""
-        pd_result = pd.Series(self.data).rank()
-        ppd_result = ppd.Series(self.data).rank()
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [float(idx + 1) for idx in range(len(self.data))]
+        result = ppd.Series(self.data).rank()
+        assert_series_equal(result, expected, rtol=1e-9)
 
     def test_rank_method(self):
         """Test rank with different method."""
-        pd_result = pd.Series(self.data).rank(method="min")
-        ppd_result = ppd.Series(self.data).rank(method="min")
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [float(idx + 1) for idx in range(len(self.data))]
+        result = ppd.Series(self.data).rank(method="min")
+        assert_series_equal(result, expected, rtol=1e-9)
 
     def test_rank_descending(self):
         """Test rank with descending order."""
-        pd_result = pd.Series(self.data).rank(ascending=False)
-        ppd_result = ppd.Series(self.data).rank(ascending=False)
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        expected = [float(len(self.data) - idx) for idx in range(len(self.data))]
+        result = ppd.Series(self.data).rank(ascending=False)
+        assert_series_equal(result, expected, rtol=1e-9)
 
     def test_sort_values_basic(self):
         """Test sort_values method."""
         # Create unsorted data
         data = [3, 1, 4, 2, 5]
-        pd_series = pd.Series(data)
-        ppd_series = ppd.Series(data)
-
-        pd_result = pd_series.sort_values()
-        ppd_result = ppd_series.sort_values()
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        result = ppd.Series(data).sort_values()
+        assert list(result.to_list()) == [1, 2, 3, 4, 5]
 
     def test_sort_values_descending(self):
         """Test sort_values with descending order."""
         # Create unsorted data
-        data = [3, 1, 4, 2, 5]
-        pd_series = pd.Series(data)
-        ppd_series = ppd.Series(data)
-
-        pd_result = pd_series.sort_values(ascending=False)
-        ppd_result = ppd_series.sort_values(ascending=False)
-
-        # Compare values directly since index behavior differs in pure Polars
-        assert list(ppd_result.values) == list(pd_result.values)
+        result = ppd.Series([3, 1, 4, 2, 5]).sort_values(ascending=False)
+        assert list(result.to_list()) == [5, 4, 3, 2, 1]
 
     def test_value_counts_basic(self):
         """Test value_counts method."""
         # Create data with duplicates
         data = [1, 2, 2, 3, 3, 3]
-        pd_series = pd.Series(data)
-        ppd_series = ppd.Series(data)
-
-        pd_result = pd_series.value_counts()
-        ppd_result = ppd_series.value_counts()
-
-        # Compare values and counts directly since index behavior differs
-        # Polars value_counts returns struct with values and counts
-        ppd_values = ppd_result.to_list()
-        ppd_counts = [
-            item["count"] for item in ppd_values
-        ]  # Extract counts from struct
-        ppd_index = [item[""] for item in ppd_values]  # Extract values from struct
-
-        assert ppd_counts == list(pd_result.values)
-        assert ppd_index == list(pd_result.index)
+        ppd_values = ppd.Series(data).value_counts().to_list()
+        counts = [item["count"] for item in ppd_values]
+        values = [item[""] for item in ppd_values]
+        assert counts == [3, 2, 1]
+        assert values == [3, 2, 1]
 
     def test_value_counts_normalize(self):
         """Test value_counts with normalize."""
         # Create data with duplicates
         data = [1, 2, 2, 3, 3, 3]
-        pd_series = pd.Series(data)
-        ppd_series = ppd.Series(data)
-
-        pd_result = pd_series.value_counts(normalize=True)
-        ppd_result = ppd_series.value_counts(normalize=True)
-
-        # Compare values and counts directly since index behavior differs
-        # Polars value_counts returns struct with values and counts
-        ppd_values = ppd_result.to_list()
-        ppd_counts = [
-            item["count"] for item in ppd_values
-        ]  # Extract counts from struct
-        ppd_index = [item[""] for item in ppd_values]  # Extract values from struct
-
-        assert ppd_counts == list(pd_result.values)
-        assert ppd_index == list(pd_result.index)
+        ppd_values = ppd.Series(data).value_counts(normalize=True).to_list()
+        counts = [item["count"] for item in ppd_values]
+        values = [item[""] for item in ppd_values]
+        assert counts == [0.5, 0.3333333333333333, 0.16666666666666666]
+        assert values == [3, 2, 1]
 
     def test_unique_basic(self):
         """Test unique method."""
         # Create data with duplicates
         data = [1, 2, 2, 3, 3, 3]
-        pd_series = pd.Series(data)
-        ppd_series = ppd.Series(data)
-
-        pd_result = pd_series.unique()
-        ppd_result = ppd_series.unique()
-
-        # Convert to sorted lists for comparison
-        pd_sorted = sorted(pd_result)
-        ppd_sorted = sorted(ppd_result.to_pandas().tolist())
-        assert pd_sorted == ppd_sorted
+        result = ppd.Series(data).unique()
+        assert sorted(result.to_list()) == [1, 2, 3]
 
     @pytest.mark.skip(
         reason="Polars null handling differs from pandas - permanent limitation"
     )
     def test_methods_with_nulls(self):
         """Test methods with null values."""
-        data = [1, None, 3, 4, 5]
-        pd_series = pd.Series(data)
-        ppd_series = ppd.Series(data)
-
-        # Test between with nulls
-        pd_result = pd_series.between(2, 4)
-        ppd_result = ppd_series.between(2, 4)
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        pytest.skip("Known limitation tracked in KNOWN_LIMITATIONS.md")
 
     def test_methods_empty_series(self):
         """Test methods with empty Series."""
-        pd_empty = pd.Series([], dtype=float)
-        ppd_empty = ppd.Series([], dtype=float)
-
-        # Test between with empty series
-        pd_result = pd_empty.between(1, 3)
-        ppd_result = ppd_empty.between(1, 3)
-        pd.testing.assert_series_equal(
-            ppd_result.to_pandas(), pd_result, check_dtype=False, check_index=False
-        )
+        result = ppd.Series([], dtype=float).between(1, 3)
+        assert result.to_list() == []
 
     def test_methods_return_types(self):
         """Test that methods return correct types."""
@@ -384,17 +273,31 @@ class TestSeriesMethods:
 
     def test_methods_preserve_original(self):
         """Test that methods don't modify original Series."""
-        original_pd = pd.Series(self.data).copy()
-        original_ppd = ppd.Series(self.data).copy()
+        original = ppd.Series(self.data)
+        before = original.to_list()
 
         # Perform operations
-        pd.Series(self.data).between(2, 4)
-        ppd.Series(self.data).between(2, 4)
-        pd.Series(self.data).clip(lower=2, upper=4)
-        ppd.Series(self.data).clip(lower=2, upper=4)
+        _ = ppd.Series(self.data).between(2, 4)
+        _ = ppd.Series(self.data).clip(lower=2, upper=4)
 
         # Original should be unchanged
-        pd.testing.assert_series_equal(original_pd, pd.Series(self.data))
-        pd.testing.assert_series_equal(
-            original_ppd.to_pandas(), ppd.Series(self.data).to_pandas()
+        assert original.to_list() == before
+
+
+class TestSeriesRolling:
+    """Test Series rolling window custom applications."""
+
+    def test_series_rolling_apply_raw(self):
+        """rolling.apply with raw list input returns custom sums."""
+        s = ppd.Series([1, 2, 3, 4], name="values")
+        result = s.rolling(window=2, min_periods=1).apply(
+            lambda window: sum(window), raw=True
         )
+        assert_series_equal(result, [1, 3, 5, 7])
+
+    def test_series_rolling_apply_series(self):
+        """rolling.apply with Series input matches rolling mean."""
+        s = ppd.Series([1.0, 2.0, 3.0, 4.0], name="values")
+        result = s.rolling(window=2).apply(lambda window: window.mean())
+        expected = [None, 1.5, 2.5, 3.5]
+        assert_series_equal(result, expected, rtol=1e-9)

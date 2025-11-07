@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polarpandas"
-version = "0.8.0"
+version = "0.9.0"
 description = "A pandas-compatible API layer built on top of Polars for high-performance data manipulation"
 readme = "README.md"
 license = {text = "MIT"}
@@ -39,9 +39,10 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
-    "ty>=0.0.1",
     "ruff>=0.1.0",
     "black>=22.0.0",
+    "sqlalchemy>=1.4.0",
+    "types-tabulate>=0.9.0",
 ]
 test = [
     "pytest>=7.0.0",
@@ -49,6 +50,8 @@ test = [
     "pytest-benchmark>=4.0.0",
     "pandas>=1.5.0",  # Only for testing/comparison
     "numpy>=1.20.0",  # Required for schema conversion tests
+    "sqlalchemy>=1.4.0",  # Required for enhanced SQL tests
+    "types-tabulate>=0.9.0",  # Type stubs for tabulate used in mypy runs
 ]
 pandas = [
     "pandas>=1.5.0",  # Optional: Required only for certain features (to_pandas, loc/iloc setters, etc.)
@@ -82,6 +85,7 @@ clipboard = [
 ]
 formatting = [
     "tabulate>=0.9.0",  # For table formatting (to_latex, to_markdown, to_html)
+    "types-tabulate>=0.9.0",  # Type stubs used by mypy when formatting extras are installed
 ]
 sqlalchemy = [
     "sqlalchemy>=1.4.0",  # For enhanced SQL operations (primary_key, auto_increment in to_sql)
@@ -105,6 +109,7 @@ all = [
     "pyperclip>=1.8.0",
     "tabulate>=0.9.0",
     "sqlalchemy>=1.4.0",
+    "types-tabulate>=0.9.0",
 ]
 
 [project.urls]
@@ -137,6 +142,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "benchmark: marks tests as benchmark tests",
+    "requires_sqlalchemy: tests that need SQLAlchemy installed",
 ]
 
 [tool.coverage.run]

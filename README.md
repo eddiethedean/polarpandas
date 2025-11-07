@@ -63,6 +63,24 @@ shape: (3, 6)
 └─────────┴─────┴─────────┴─────────────┴────────────┴────────────┘
 ```
 
+## 🎯 What's New in v0.9.0
+
+### ⚙️ **Rolling Apply Compatibility**
+- ✅ `DataFrame.rolling().apply` now leverages Polars' native `rolling_map`, so pandas-style custom functions Just Work™
+- ✅ Full support for `raw=True/False`, positional `args`, keyword `kwargs`, weights, centered windows, and `min_periods`
+- ✅ More predictable results when mixing numeric and object windows thanks to consistent Series wrapping
+
+### 🧭 **GroupBy Reliability**
+- ✅ Grouping by missing columns now mirrors pandas: the validation happens at aggregation time and raises a clear `KeyError`
+- ✅ Safer attribute access on `_GroupBy` objects, preventing silent failures in chained operations
+
+### 🧪 **Quality & Tooling**
+- ✅ **1,014 tests passing** across the suite, including comprehensive rolling-window scenarios
+- ✅ `mypy` passes cleanly for `src/polarpandas`, keeping the public API fully typed
+- ✅ `ruff check`/`ruff format` run squeaky clean on the updated codebase
+
+---
+
 ## 🎯 What's New in v0.8.0
 
 ### 🗄️ **Enhanced SQL Support**
@@ -175,6 +193,7 @@ pip install polarpandas[all]         # Install all optional dependencies
 - `openpyxl`, `xlsxwriter` - For Excel file I/O
 - `lxml`, `html5lib` - For HTML/XML parsing
 - `pyreadstat`, `sas7bdat` - For SPSS/SAS file support
+- `types-tabulate` - Lightweight type stubs to keep `tabulate`-powered helpers mypy-clean
 - And more... see `pyproject.toml` for complete list
 
 ## 🔥 Core Features
@@ -483,6 +502,10 @@ pytest tests/ --cov=src/polarpandas --cov-report=html
 
 # Specific test file
 pytest tests/test_dataframe_core.py -v
+
+# SQL enhanced suite (requires SQLAlchemy extra)
+pip install -e '.[test,sqlalchemy]'
+pytest -m requires_sqlalchemy tests/test_sql_enhanced.py -v
 ```
 
 ### **Code Quality**
@@ -549,6 +572,8 @@ git clone https://github.com/eddiethedean/polarpandas.git
 cd polarpandas
 pip install -e ".[dev,test]"
 ```
+
+> 💡 **Running optional SQL tests?** Install the SQLAlchemy extra (`pip install -e ".[sqlalchemy]"` or rely on the dev/test extras above) and execute `pytest -m requires_sqlalchemy` to include the SQL enhanced suite. Without the extra, those tests are automatically skipped.
 
 ## 📚 **Documentation**
 

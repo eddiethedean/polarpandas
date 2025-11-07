@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2025-11-07
+
+### Added
+- **Rolling apply compatibility** — `DataFrame.rolling().apply` now wraps Polars' `rolling_map`, enabling pandas-style custom window functions
+- **Documentation refresh** — README/TODO now highlight the 0.9.0 release and current roadmap
+
+### Changed
+- **Window semantics** — Respects `raw`, `args`, `kwargs`, `weights`, `center`, and `min_periods` for rolling operations
+- **GroupBy validation** — Missing columns are reported at aggregation time with pandas-compatible `KeyError` messaging
+- **Developer tooling** — Project version bumped to 0.9.0 with README and TODO updates covering the new behaviour
+
+### Fixed
+- **GroupBy attribute access** — Prevents accidental usage of incomplete `_GroupBy` objects when column validation fails
+- **Rolling window edge cases** — Ensures mixed-type windows and Series-wrapped inputs behave consistently
+- **CI hygiene** — `mypy` (package scope) and `ruff` remain green; full pytest suite (1,014 tests) passes
+
 ## [0.8.0] - 2025-11-07
 
 ### Added

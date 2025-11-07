@@ -266,7 +266,8 @@ def scan_csv(path: str, **kwargs: Any) -> LazyFrame:
     if schema_to_use is not None:
         polars_schema = convert_schema_to_polars(schema_to_use)
         if polars_schema is not None:
-            kwargs["schema"] = polars_schema
+            # scan_csv accepts partial dtype mappings via schema overrides
+            kwargs["schema_overrides"] = polars_schema
 
     return LazyFrame(pl.scan_csv(path, **kwargs))
 

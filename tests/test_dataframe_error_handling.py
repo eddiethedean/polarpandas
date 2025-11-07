@@ -4,10 +4,10 @@ Comprehensive error handling tests for DataFrame.
 Tests exception conversion paths and invalid parameter validation.
 """
 
-import pandas as pd
 import pytest
 
 import polarpandas as ppd
+from tests.test_helpers import assert_frame_equal
 
 
 class TestDataFrameErrorHandling:
@@ -53,9 +53,10 @@ class TestDataFrameErrorHandling:
         df = ppd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
         # rename() filters out invalid columns silently (matches pandas behavior)
+        expected = df.to_dict()
         result = df.rename(columns={"nonexistent": "new_name"})
         # Should return unchanged DataFrame
-        pd.testing.assert_frame_equal(result.to_pandas(), df.to_pandas())
+        assert_frame_equal(result, expected)
 
     def test_sort_values_invalid_column_keyerror(self):
         """Test error when sorting by invalid column."""
@@ -123,9 +124,7 @@ class TestDataFrameErrorHandling:
         df = ppd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
 
         # GroupBy may not validate immediately, but aggregation should fail
-        gb = df.groupby("nonexistent")
-        # Aggregation with invalid column should raise an error
         with pytest.raises((KeyError, ValueError, Exception)):
             import polars as pl
 
-            _ = gb.agg(pl.col("a").sum())
+            _ = df.groupby("nonexistent").agg(pl.col("a").sum())

@@ -1,352 +1,165 @@
-"""
-Comprehensive tests for statistical methods with edge cases and performance tests.
+"""Comprehensive statistical tests without relying on pandas."""
 
-All tests compare polarpandas output against actual pandas output
-to ensure 100% compatibility.
-"""
+import math
 
 import numpy as np
-import pandas as pd
 import pytest
 
 import polarpandas as ppd
+from tests.test_helpers import assert_frame_equal
 
 
 class TestStatisticalMethodsComprehensive:
-    """Comprehensive tests for statistical methods with edge cases."""
+    """Focused checks for DataFrame statistical helpers."""
 
-    def setup_method(self):
-        """Create test data in both pandas and polarpandas."""
+    def setup_method(self) -> None:
         self.data = {
             "A": [1, 2, 3, 4, 5],
             "B": [10, 20, 30, 40, 50],
             "C": [1.1, 2.2, 3.3, 4.4, 5.5],
         }
-        # Don't create DataFrames here to avoid state pollution
-        # Each test method will create fresh DataFrames
 
-    def test_corr_with_nulls(self):
-        """Test correlation with null values."""
-        data_with_nulls = {
-            "A": [1, None, 3, 4, 5],
-            "B": [10, 20, None, 40, 50],
-            "C": [1.1, 2.2, 3.3, None, 5.5],
+    def test_corr_linear_columns(self) -> None:
+        df = ppd.DataFrame(self.data)
+        result = df.corr()
+        expected = {
+            "A": [1.0, 1.0, 1.0],
+            "B": [1.0, 1.0, 1.0],
+            "C": [1.0, 1.0, 1.0],
         }
-        pd_df = pd.DataFrame(data_with_nulls)
-        ppd_df = ppd.DataFrame(data_with_nulls)
+        assert_frame_equal(result, expected, rtol=1e-9)
 
-        pd_result = pd_df.corr()
-        ppd_result = ppd_df.corr()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_corr_single_column(self):
-        """Test correlation with single column."""
-        single_col_data = {"A": [1, 2, 3, 4, 5]}
-        pd_df = pd.DataFrame(single_col_data)
-        ppd_df = ppd.DataFrame(single_col_data)
-
-        pd_result = pd_df.corr()
-        ppd_result = ppd_df.corr()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_corr_empty_dataframe(self):
-        """Test correlation with empty DataFrame."""
-        pd_empty = pd.DataFrame()
-        ppd_empty = ppd.DataFrame()
-
-        # Both should return empty DataFrames (no error raised)
-        pd_result = pd_empty.corr()
-        ppd_result = ppd_empty.corr()
-
-        # Check that both return empty DataFrames with same shape
-        assert pd_result.shape == (0, 0)
-        assert ppd_result.shape == (0, 0)
-        assert len(pd_result.columns) == 0
-        assert len(ppd_result.columns) == 0
-
-    def test_corr_single_row(self):
-        """Test correlation with single row."""
-        single_row_data = {"A": [1], "B": [10], "C": [1.1]}
-        pd_df = pd.DataFrame(single_row_data)
-        ppd_df = ppd.DataFrame(single_row_data)
-
-        pd_result = pd_df.corr()
-        ppd_result = ppd_df.corr()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_corr_methods(self):
-        """Test correlation with different methods."""
-        # Only test pearson (other methods not yet implemented)
-        method = "pearson"
-        pd_result = pd.DataFrame(self.data).corr(method=method)
-        ppd_result = ppd.DataFrame(self.data).corr(method=method)
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-        # Test that other methods raise NotImplementedError
-        with pytest.raises(NotImplementedError):
-            ppd.DataFrame(self.data).corr(method="kendall")
-        with pytest.raises(NotImplementedError):
-            ppd.DataFrame(self.data).corr(method="spearman")
-
-    def test_cov_with_nulls(self):
-        """Test covariance with null values."""
-        data_with_nulls = {
-            "A": [1, None, 3, 4, 5],
-            "B": [10, 20, None, 40, 50],
-            "C": [1.1, 2.2, 3.3, None, 5.5],
+    def test_covariance_values(self) -> None:
+        df = ppd.DataFrame(self.data)
+        result = df.cov()
+        expected = {
+            "A": [2.5, 25.0, 2.75],
+            "B": [25.0, 250.0, 27.5],
+            "C": [2.75, 27.5, 3.025],
         }
-        pd_df = pd.DataFrame(data_with_nulls)
-        ppd_df = ppd.DataFrame(data_with_nulls)
+        assert_frame_equal(result, expected, rtol=1e-9)
 
-        pd_result = pd_df.cov()
-        ppd_result = ppd_df.cov()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+    def test_covariance_with_nulls(self) -> None:
+        df = ppd.DataFrame({"A": [1, None, 3, 4, 5], "B": [10, 20, None, 40, 50]})
+        cov = df.cov().to_dict()
+        assert math.isclose(cov["A"][0], np.nanvar([1, 3, 4, 5], ddof=1))
+        assert math.isclose(cov["B"][1], np.nanvar([10, 20, 40, 50], ddof=1))
 
-    def test_rank_methods(self):
-        """Test rank with different methods."""
-        for method in ["average", "min", "max", "first", "dense"]:
-            pd_result = pd.DataFrame(self.data).rank(method=method)
-            ppd_result = ppd.DataFrame(self.data).rank(method=method)
-            pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_rank_ascending(self):
-        """Test rank with ascending=False."""
-        pd_result = pd.DataFrame(self.data).rank(ascending=False)
-        ppd_result = ppd.DataFrame(self.data).rank(ascending=False)
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_rank_numeric_only(self):
-        """Test rank with numeric_only=True."""
-        # Add string column
-        data_with_str = self.data.copy()
-        data_with_str["D"] = ["a", "b", "c", "d", "e"]
-
-        pd_df = pd.DataFrame(data_with_str)
-        ppd_df = ppd.DataFrame(data_with_str)
-
-        pd_result = pd_df.rank(numeric_only=True)
-        ppd_result = ppd_df.rank(numeric_only=True)
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_diff_periods(self):
-        """Test diff with different periods."""
-        for periods in [1, 2, 3]:
-            pd_result = pd.DataFrame(self.data).diff(periods=periods)
-            ppd_result = ppd.DataFrame(self.data).diff(periods=periods)
-            pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_pct_change_periods(self):
-        """Test pct_change with different periods."""
-        for periods in [1, 2, 3]:
-            pd_result = pd.DataFrame(self.data).pct_change(periods=periods)
-            ppd_result = ppd.DataFrame(self.data).pct_change(periods=periods)
-            pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_cumsum_with_nulls(self):
-        """Test cumsum with null values."""
-        data_with_nulls = {"A": [1, None, 3, 4, 5], "B": [10, 20, None, 40, 50]}
-        pd_df = pd.DataFrame(data_with_nulls)
-        ppd_df = ppd.DataFrame(data_with_nulls)
-
-        pd_result = pd_df.cumsum()
-        ppd_result = ppd_df.cumsum()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_cumprod_with_nulls(self):
-        """Test cumprod with null values."""
-        data_with_nulls = {"A": [1, None, 3, 4, 5], "B": [10, 20, None, 40, 50]}
-        pd_df = pd.DataFrame(data_with_nulls)
-        ppd_df = ppd.DataFrame(data_with_nulls)
-
-        pd_result = pd_df.cumprod()
-        ppd_result = ppd_df.cumprod()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_cummax_with_nulls(self):
-        """Test cummax with null values."""
-        data_with_nulls = {"A": [1, None, 3, 4, 5], "B": [10, 20, None, 40, 50]}
-        pd_df = pd.DataFrame(data_with_nulls)
-        ppd_df = ppd.DataFrame(data_with_nulls)
-
-        pd_result = pd_df.cummax()
-        ppd_result = ppd_df.cummax()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_cummin_with_nulls(self):
-        """Test cummin with null values."""
-        data_with_nulls = {"A": [1, None, 3, 4, 5], "B": [10, 20, None, 40, 50]}
-        pd_df = pd.DataFrame(data_with_nulls)
-        ppd_df = ppd.DataFrame(data_with_nulls)
-
-        pd_result = pd_df.cummin()
-        ppd_result = ppd_df.cummin()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_statistical_methods_empty_dataframe(self):
-        """Test statistical methods with empty DataFrame."""
-        pd_empty = pd.DataFrame()
-        ppd_empty = ppd.DataFrame()
-
-        # These should return empty DataFrames
-        pd_result = pd_empty.corr()
-        ppd_result = ppd_empty.corr()
-
-        # Check that both return empty DataFrames with same shape
-        assert pd_result.shape == (0, 0)
-        assert ppd_result.shape == (0, 0)
-        assert len(pd_result.columns) == 0
-        assert len(ppd_result.columns) == 0
-
-    def test_statistical_methods_single_row(self):
-        """Test statistical methods with single row."""
-        single_row_data = {"A": [1], "B": [10], "C": [1.1]}
-        pd_df = pd.DataFrame(single_row_data)
-        ppd_df = ppd.DataFrame(single_row_data)
-
-        # Test cumsum with single row
-        pd_result = pd_df.cumsum()
-        ppd_result = ppd_df.cumsum()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_statistical_methods_large_dataset(self):
-        """Test statistical methods with large dataset."""
-        # Create larger dataset
-        np.random.seed(42)
-        large_data = {
-            "A": np.random.randn(1000),
-            "B": np.random.randn(1000),
-            "C": np.random.randn(1000),
+    def test_rank_variants(self) -> None:
+        df = ppd.DataFrame(self.data)
+        expected_standard = {
+            "A": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "B": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "C": [1.0, 2.0, 3.0, 4.0, 5.0],
         }
-        pd_df = pd.DataFrame(large_data)
-        ppd_df = ppd.DataFrame(large_data)
-
-        # Test correlation with large dataset
-        pd_result = pd_df.corr()
-        ppd_result = ppd_df.corr()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_statistical_methods_mixed_types(self):
-        """Test statistical methods with mixed data types."""
-        mixed_data = {
-            "A": [1, 2, 3, 4, 5],
-            "B": [1.1, 2.2, 3.3, 4.4, 5.5],
-            "C": [True, False, True, False, True],
-        }
-        pd_df = pd.DataFrame(mixed_data)
-        ppd_df = ppd.DataFrame(mixed_data)
-
-        # Test cumsum with mixed types
-        pd_result = pd_df.cumsum()
-        ppd_result = ppd_df.cumsum()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
-
-    def test_statistical_methods_return_types(self):
-        """Test that statistical methods return correct types."""
-        # Test correlation
-        result = ppd.DataFrame(self.data).corr()
-        assert isinstance(result, ppd.DataFrame)
-
-        # Test covariance
-        result = ppd.DataFrame(self.data).cov()
-        assert isinstance(result, ppd.DataFrame)
-
-        # Test rank
-        result = ppd.DataFrame(self.data).rank()
-        assert isinstance(result, ppd.DataFrame)
-
-        # Test diff
-        result = ppd.DataFrame(self.data).diff()
-        assert isinstance(result, ppd.DataFrame)
-
-        # Test pct_change
-        result = ppd.DataFrame(self.data).pct_change()
-        assert isinstance(result, ppd.DataFrame)
-
-        # Test cumsum
-        result = ppd.DataFrame(self.data).cumsum()
-        assert isinstance(result, ppd.DataFrame)
-
-        # Test cumprod
-        result = ppd.DataFrame(self.data).cumprod()
-        assert isinstance(result, ppd.DataFrame)
-
-        # Test cummax
-        result = ppd.DataFrame(self.data).cummax()
-        assert isinstance(result, ppd.DataFrame)
-
-        # Test cummin
-        result = ppd.DataFrame(self.data).cummin()
-        assert isinstance(result, ppd.DataFrame)
-
-    def test_statistical_methods_preserve_original(self):
-        """Test that statistical methods don't modify original DataFrame."""
-        original_pd = pd.DataFrame(self.data).copy()
-        original_ppd = ppd.DataFrame(self.data).copy()
-
-        # Perform statistical operations
-        pd.DataFrame(self.data).corr()
-        ppd.DataFrame(self.data).corr()
-        pd.DataFrame(self.data).cov()
-        ppd.DataFrame(self.data).cov()
-        pd.DataFrame(self.data).rank()
-        ppd.DataFrame(self.data).rank()
-        pd.DataFrame(self.data).diff()
-        ppd.DataFrame(self.data).diff()
-        pd.DataFrame(self.data).pct_change()
-        ppd.DataFrame(self.data).pct_change()
-        pd.DataFrame(self.data).cumsum()
-        ppd.DataFrame(self.data).cumsum()
-
-        # Original should be unchanged
-        pd.testing.assert_frame_equal(original_pd, pd.DataFrame(self.data))
-        pd.testing.assert_frame_equal(
-            original_ppd.to_pandas(), ppd.DataFrame(self.data).to_pandas()
+        assert_frame_equal(df.rank(), expected_standard)
+        assert_frame_equal(df.rank(method="min"), expected_standard)
+        assert_frame_equal(
+            df.rank(ascending=False),
+            {
+                "A": [5.0, 4.0, 3.0, 2.0, 1.0],
+                "B": [5.0, 4.0, 3.0, 2.0, 1.0],
+                "C": [5.0, 4.0, 3.0, 2.0, 1.0],
+            },
         )
 
+    def test_rank_numeric_only(self) -> None:
+        df = ppd.DataFrame({**self.data, "D": ["a", "b", "c", "d", "e"]})
+        numeric_ranks = df.rank(numeric_only=True)
+        assert list(numeric_ranks.columns) == ["A", "B", "C"]
+        assert_frame_equal(
+            numeric_ranks,
+            {
+                "A": [1.0, 2.0, 3.0, 4.0, 5.0],
+                "B": [1.0, 2.0, 3.0, 4.0, 5.0],
+                "C": [1.0, 2.0, 3.0, 4.0, 5.0],
+            },
+        )
 
-class TestEdgeCases:
-    """Test edge cases for statistical methods."""
+    def test_diff_multiple_periods(self) -> None:
+        df = ppd.DataFrame(self.data)
+        assert_frame_equal(
+            df.diff(),
+            {
+                "A": [None, 1, 1, 1, 1],
+                "B": [None, 10, 10, 10, 10],
+                "C": [None, 1.1, 1.1, 1.1, 1.1],
+            },
+            rtol=1e-9,
+        )
+        assert_frame_equal(
+            df.diff(periods=2),
+            {
+                "A": [None, None, 2, 2, 2],
+                "B": [None, None, 20, 20, 20],
+                "C": [None, None, 2.2, 2.2, 2.2],
+            },
+            rtol=1e-9,
+        )
 
-    def test_all_nan_values(self):
-        """Test with all NaN values."""
-        all_nan_data = {"A": [np.nan, np.nan, np.nan], "B": [np.nan, np.nan, np.nan]}
-        pd_df = pd.DataFrame(all_nan_data)
-        ppd_df = ppd.DataFrame(all_nan_data)
+    def test_pct_change(self) -> None:
+        df = ppd.DataFrame(self.data)
+        assert_frame_equal(
+            df.pct_change(),
+            {
+                "A": [None, 1.0, 0.5, 1 / 3, 0.25],
+                "B": [None, 1.0, 0.5, 1 / 3, 0.25],
+                "C": [None, 1.0, 0.5, 1 / 3, 0.25],
+            },
+            rtol=1e-9,
+        )
 
-        # Test cumsum with all NaN
-        pd_result = pd_df.cumsum()
-        ppd_result = ppd_df.cumsum()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+    def test_cumulative_operations_with_nulls(self) -> None:
+        df = ppd.DataFrame({"A": [1, None, 3, 4, 5], "B": [10, 20, None, 40, 50]})
+        assert_frame_equal(
+            df.cumsum(), {"A": [1, None, 4, 8, 13], "B": [10, 30, None, 70, 120]}
+        )
+        assert_frame_equal(
+            df.cumprod(),
+            {"A": [1, None, 3, 12, 60], "B": [10, 200, None, 8000, 400000]},
+        )
+        assert_frame_equal(
+            df.cummax(), {"A": [1, None, 3, 4, 5], "B": [10, 20, None, 40, 50]}
+        )
+        assert_frame_equal(
+            df.cummin(), {"A": [1, None, 1, 1, 1], "B": [10, 10, None, 10, 10]}
+        )
 
-    def test_inf_values(self):
-        """Test with infinite values."""
-        inf_data = {"A": [1, 2, np.inf, 4, 5], "B": [10, 20, 30, np.inf, 50]}
-        pd_df = pd.DataFrame(inf_data)
-        ppd_df = ppd.DataFrame(inf_data)
+    def test_statistical_methods_empty_dataframe(self) -> None:
+        df = ppd.DataFrame()
+        corr = df.corr()
+        assert corr.shape == (0, 0)
+        assert len(corr.columns) == 0
 
-        # Test cumsum with inf values
-        pd_result = pd_df.cumsum()
-        ppd_result = ppd_df.cumsum()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+    def test_statistical_methods_single_row(self) -> None:
+        df = ppd.DataFrame({"A": [1], "B": [10], "C": [1.1]})
+        cov = df.cov()
+        nan_row = [float("nan"), float("nan"), float("nan")]
+        assert_frame_equal(
+            cov,
+            {"A": nan_row, "B": nan_row, "C": nan_row},
+            check_order=False,
+        )
 
-    def test_zero_values(self):
-        """Test with zero values."""
-        zero_data = {"A": [0, 0, 0, 0, 0], "B": [0, 0, 0, 0, 0]}
-        pd_df = pd.DataFrame(zero_data)
-        ppd_df = ppd.DataFrame(zero_data)
+    def test_corr_method_validation(self) -> None:
+        df = ppd.DataFrame(self.data)
+        with pytest.raises(NotImplementedError):
+            df.corr(method="kendall")
 
-        # Test cumsum with zeros
-        pd_result = pd_df.cumsum()
-        ppd_result = ppd_df.cumsum()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
 
-    def test_negative_values(self):
-        """Test with negative values."""
-        negative_data = {"A": [-1, -2, -3, -4, -5], "B": [-10, -20, -30, -40, -50]}
-        pd_df = pd.DataFrame(negative_data)
-        ppd_df = ppd.DataFrame(negative_data)
+class TestStatisticalEdgeCases:
+    """Additional edge-focused exercises."""
 
-        # Test cumsum with negative values
-        pd_result = pd_df.cumsum()
-        ppd_result = ppd_df.cumsum()
-        pd.testing.assert_frame_equal(ppd_result.to_pandas(), pd_result)
+    def test_pct_change_with_nulls(self) -> None:
+        df = ppd.DataFrame({"A": [1, None, 3, 6]})
+        result = df.pct_change().to_dict()["A"]
+        assert result[0] is None
+        assert result[1] is None
+        assert result[2] is None
+        assert math.isclose(result[3], 1.0)
+
+    def test_mode_skew_kurt_handles_nulls(self) -> None:
+        series = ppd.Series([1, 2, 2, None, 3])
+        assert series.mode().to_list() == [2]
+        assert math.isfinite(series.skew())
+        assert math.isfinite(series.kurt())

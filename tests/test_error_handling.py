@@ -68,7 +68,6 @@ class TestDataFrameErrorHandling:
 class TestSeriesErrorHandling:
     """Tests for Series error handling."""
 
-    @pytest.mark.skip(reason="Series doesn't validate index length yet")
     def test_series_length_mismatch_index(self):
         """Test creating Series with mismatched index length."""
         with pytest.raises((ValueError, Exception)):
@@ -201,7 +200,6 @@ class TestAsTypeErrors:
 class TestGroupByErrors:
     """Tests for groupby error handling."""
 
-    @pytest.mark.skip(reason="polarpandas groupby doesn't validate column names yet")
     def test_groupby_invalid_column(self):
         """Test groupby with non-existent column."""
         df = ppd.DataFrame({"A": [1, 2, 3]})
@@ -276,7 +274,6 @@ class TestMultiIndexFromMethodsErrors:
         with pytest.raises(ValueError):
             MultiIndex.from_arrays([["a", "b"], ["x"]])
 
-    @pytest.mark.skip(reason="MultiIndex.from_tuples doesn't validate input type yet")
     def test_from_tuples_invalid_input(self):
         """Test from_tuples with invalid input."""
         with pytest.raises((ValueError, TypeError, Exception)):
@@ -311,7 +308,6 @@ class TestDataFrameMethodErrors:
         except (NotImplementedError, AttributeError):
             pytest.skip("pivot not yet implemented")
 
-    @pytest.mark.skip(reason="DataFrame.rename doesn't validate mapper type yet")
     def test_rename_invalid_mapper(self):
         """Test rename with invalid mapper."""
         df = ppd.DataFrame({"A": [1, 2]})

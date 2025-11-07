@@ -4,7 +4,9 @@ Test Index functionality.
 
 import polars as pl
 
+import polarpandas as ppd
 from polarpandas import Index
+from polarpandas._index_manager import IndexManager
 
 
 class TestIndexInitialization:
@@ -39,6 +41,56 @@ class TestIndexInitialization:
         assert isinstance(idx, Index)
         assert isinstance(idx._series, pl.Series)
         assert len(idx) == 0
+
+
+class TestIndexManagerUtilities:
+    """Tests for internal IndexManager helper methods."""
+
+    def test_preserve_index_copies_index_metadata(self):
+        source = ppd.DataFrame({"a": [1, 2]}, index=["row-1", "row-2"])
+        source._index_name = "row_label"
+
+        result_pl = source._df.select(["a"])
+        preserved = IndexManager.preserve_index(source, result_pl)
+
+        assert preserved._index == source._index
+        assert preserved._index_name == "row_label"
+
+    def test_preserve_index_without_name(self):
+        source = ppd.DataFrame({"a": [1, 2]}, index=["x", "y"])
+        source._index_name = "row_label"
+
+        result_pl = source._df.with_columns((pl.col("a") * 2).alias("a"))
+        preserved = IndexManager.preserve_index(source, result_pl, preserve_name=False)
+
+        assert preserved._index == source._index
+        assert preserved._index_name is None
+
+    def test_preserve_index_inplace_resets_mismatched_length(self):
+        df = ppd.DataFrame({"a": [1, 2, 3]}, index=["x", "y", "z"])
+        filtered = df._df.filter(pl.col("a") > 2)
+
+        IndexManager.preserve_index_inplace(df, filtered)
+        assert df._index is None
+        assert df._index_name is None
+
+    def test_extract_index_for_rows_bounds_clipped(self):
+        df = ppd.DataFrame({"a": [1, 2, 3]}, index=["x", "y", "z"])
+
+        extracted = IndexManager.extract_index_for_rows(df, [0, 2, 10])
+        assert extracted == ["x", "z"]
+
+    def test_create_index_from_columns_multi_level(self):
+        polars_df = pl.DataFrame({"city": ["NY", "SF"], "year": [2020, 2021]})
+
+        index_values, index_name = IndexManager.create_index_from_columns(
+            polars_df, ["city", "year"]
+        )
+        assert index_values == [("NY", 2020), ("SF", 2021)]
+        assert index_name is None
+
+    def test_validate_index_length_mismatch(self):
+        assert IndexManager.validate_index_length(["x"], data_length=2) is False
 
 
 class TestIndexDelegation:

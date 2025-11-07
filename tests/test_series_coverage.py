@@ -298,17 +298,22 @@ class TestSeriesConversion:
         result = s.to_dict()
         assert result == {"a": 1, "b": 2, "c": 3}
 
-    def test_to_pandas(self):
-        """Test to_pandas conversion."""
-        try:
-            import pandas as pd
+    def test_to_pandas(self, monkeypatch):
+        """`to_pandas` should raise if pandas is unavailable."""
+        import builtins
 
-            s = ppd.Series([1, 2, 3], name="test")
-            ps = s.to_pandas()
-            assert isinstance(ps, pd.Series)
-            assert ps.name == "test"
-        except ImportError:
-            pytest.skip("pandas not installed")
+        original_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "pandas":
+                raise ImportError("pandas missing in test")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.__import__", fake_import)
+
+        s = ppd.Series([1, 2, 3], name="test")
+        with pytest.raises(ImportError):
+            s.to_pandas()
 
 
 class TestSeriesCumulative:

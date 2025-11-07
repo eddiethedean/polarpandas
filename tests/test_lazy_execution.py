@@ -289,6 +289,14 @@ class TestLazyFrame:
         result = lf[mask]
         assert isinstance(result, LazyFrame)
 
+    def test_lazyframe_boolean_indexing_iterable(self):
+        """Test boolean indexing with iterable that isn't a list."""
+        lf = LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+        mask = (True, False, True)
+        result = lf[mask]
+        assert isinstance(result, LazyFrame)
+
     def test_lazyframe_getitem_error_conversion(self):
         """Test __getitem__ converts Polars exceptions."""
         # Lines 186-190: Exception conversion
@@ -367,6 +375,23 @@ class TestLazyFrame:
         # Collect to verify it worked
         result_df = result.collect()
         assert isinstance(result_df, ppd.DataFrame)
+
+    def test_lazyframe_collect_preserves_manual_index(self, mixed_schema_frame):
+        """collect() should attach any stored index metadata to the result."""
+
+        polars_df = mixed_schema_frame._df
+        lf = LazyFrame(polars_df, index=["r0", "r1", "r2"], index_name="row_id")
+
+        collected = lf.collect()
+        assert collected._index == ["r0", "r1", "r2"]
+        assert collected._index_name == "row_id"
+
+    def test_lazyframe_getitem_multiple_columns(self):
+        """Selecting multiple columns should return a LazyFrame without materializing."""
+
+        lf = LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+        subset = lf[["a", "c"]]
+        assert isinstance(subset, LazyFrame)
 
 
 class TestScanFunctions:

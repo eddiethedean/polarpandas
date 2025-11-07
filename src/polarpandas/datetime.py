@@ -25,8 +25,63 @@ Notes
 
 from typing import Any, Optional
 
+import polars as pl
+
 from .frame import DataFrame
 from .series import Series
+
+try:  # Optional dependency used for timedelta utilities
+    import pandas as pd
+except ImportError:  # pragma: no cover - pandas is present in dev/test envs
+    pd = None
+
+
+def _require_pandas(feature: str) -> None:
+    if pd is None:
+        raise ImportError(
+            f"pandas is required for {feature}. Install pandas to enable this feature."
+        )
+
+
+def _first_non_none(values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _convert_iterable_to_timedelta(
+    values: Any, *, unit: Optional[str], name: str = "timedelta"
+) -> Series:
+    _require_pandas("to_timedelta()")
+
+    sample = _first_non_none(values)
+    inferred_unit = unit
+    if isinstance(sample, str):
+        inferred_unit = None
+
+    try:
+        td_values = pd.to_timedelta(values, unit=inferred_unit)
+    except Exception as exc:
+        raise ValueError(str(exc)) from exc
+
+    if isinstance(td_values, pd.Series):
+        pd_series = td_values.rename(name)
+    else:
+        pd_series = pd.Series(td_values, name=name)
+
+    polars_series = pl.from_pandas(pd_series)
+    return Series(polars_series)
+
+
+def _convert_scalar_to_timedelta(value: Any, *, unit: str) -> Any:
+    _require_pandas("to_timedelta()")
+    try:
+        td_value = pd.to_timedelta(value, unit=unit)
+    except Exception as exc:
+        raise ValueError(str(exc)) from exc
+
+    return td_value.to_pytimedelta()
 
 
 def date_range(
@@ -214,29 +269,27 @@ def timedelta_range(
     >>> import polarpandas as ppd
     >>> deltas = ppd.timedelta_range(start="1 day", periods=5)
     """
-    import polars as pl
-
-    from .series import Series
+    if pd is None:
+        raise ImportError(
+            "pandas is required for timedelta_range(). Install pandas to enable this feature."
+        )
 
     if start and periods:
-        # Parse start timedelta and generate range
-        # Simplified: assume format like "1 day", "2 days", etc.
-        base_delta = pl.duration(days=1)  # Default
-        if "day" in start.lower():
-            try:
-                days = int(start.split()[0])
-                base_delta = pl.duration(days=days)
-            except (ValueError, IndexError):
-                pass
-
-        deltas = [base_delta * i for i in range(periods)]
-        return Series(deltas)
+        try:
+            td_index = pd.timedelta_range(start=start, periods=periods, freq=freq)
+        except Exception as exc:  # pragma: no cover - pandas raises informative errors
+            raise ValueError(str(exc)) from exc
     elif start and end:
-        # Generate range between start and end
-        deltas = [pl.duration(days=1), pl.duration(days=2)]  # Simplified
-        return Series(deltas)
+        try:
+            td_index = pd.timedelta_range(start=start, end=end, freq=freq)
+        except Exception as exc:  # pragma: no cover - pandas raises informative errors
+            raise ValueError(str(exc)) from exc
     else:
         raise ValueError("Must specify either (start and end) or (start and periods)")
+
+    pd_series = pd.Series(td_index, name="timedelta")
+    polars_series = pl.from_pandas(pd_series)
+    return Series(polars_series)
 
 
 def period_range(
@@ -359,45 +412,18 @@ def to_timedelta(arg: Any, unit: str = "ns", **kwargs: Any) -> Any:
     >>> import polarpandas as ppd
     >>> deltas = ppd.to_timedelta(["1 day", "2 days"])
     """
-    import polars as pl
-
-    from .series import Series
-
     if isinstance(arg, Series):
-        # Convert Series to timedelta
-        if arg._series.dtype == pl.Utf8:
-            # Parse string timedeltas
-            result = arg._series.str.replace(" day", "d").str.replace(" days", "d")
-            return Series(result.str.to_datetime())
-        else:
-            # Convert numeric to timedelta
-            return Series(arg._series.cast(pl.Duration))
-    elif isinstance(arg, (list, tuple)):
-        # Convert list to Series and then to timedelta
-        pl_series = pl.Series(arg)
-        if pl_series.dtype == pl.Utf8:
-            result = pl_series.str.replace(" day", "d").str.replace(" days", "d")
-            return Series(result.str.to_datetime())
-        else:
-            return Series(pl_series.cast(pl.Duration))
-    elif isinstance(arg, (int, float)):
-        # Convert scalar to timedelta based on unit
-        if unit == "ns":
-            delta = pl.duration(nanoseconds=int(arg))
-        elif unit == "us":
-            delta = pl.duration(microseconds=int(arg))
-        elif unit == "ms":
-            delta = pl.duration(milliseconds=int(arg))
-        elif unit == "s":
-            delta = pl.duration(seconds=int(arg))
-        elif unit == "m":
-            delta = pl.duration(minutes=int(arg))
-        elif unit == "h":
-            delta = pl.duration(hours=int(arg))
-        elif unit == "d":
-            delta = pl.duration(days=int(arg))
-        else:
-            delta = pl.duration(days=int(arg))
-        return Series([delta])
-    else:
-        raise ValueError(f"Unsupported type for to_timedelta: {type(arg)}")
+        values = arg.to_pandas()
+        name = arg.name or "timedelta"
+        return _convert_iterable_to_timedelta(values, unit=unit, name=name)
+
+    if isinstance(arg, (list, tuple)):
+        return _convert_iterable_to_timedelta(list(arg), unit=unit)
+
+    if isinstance(arg, (int, float)):
+        return _convert_scalar_to_timedelta(arg, unit=unit)
+
+    if isinstance(arg, str):
+        return _convert_iterable_to_timedelta([arg], unit=None)
+
+    raise ValueError(f"Unsupported type for to_timedelta: {type(arg)}")

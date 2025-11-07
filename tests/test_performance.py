@@ -8,7 +8,6 @@ and doesn't regress on critical operations.
 import time
 
 import polars as pl
-import pytest
 
 import polarpandas as ppd
 
@@ -86,7 +85,6 @@ class TestFilterPerformance:
         assert len(result) < len(df)
         assert elapsed < 1.0
 
-    @pytest.mark.skip(reason="Series & operator not implemented yet")
     def test_multiple_filter_conditions(self):
         """Test filtering with multiple conditions."""
         df = ppd.DataFrame({"A": list(range(10000)), "B": list(range(10000, 20000))})
