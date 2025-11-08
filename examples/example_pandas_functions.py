@@ -40,7 +40,9 @@ print("📖 2. IO OPERATIONS - WRITE & READ")
 print("-" * 70)
 
 # Write to CSV
-csv_file = tempfile.NamedTemporaryFile(delete=False, suffix=".csv").name
+with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+    csv_file = tmp.name
+
 df1.to_csv(csv_file)
 print(f"✅ Written to CSV: {csv_file}")
 

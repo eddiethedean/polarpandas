@@ -105,6 +105,7 @@ class LazyFrame:
     _index_name: Optional[Union[str, Tuple[str, ...]]]
     _columns_index: Optional[Any]
     _df: pl.LazyFrame
+    _known_row_count: Optional[int]
 
     def _materialize(self) -> pl.DataFrame:
         """
@@ -140,51 +141,70 @@ class LazyFrame:
         index : array-like, optional
             Index to use for resulting frame
         """
-        if data is None:
-            # Handle columns and index parameters for empty LazyFrame
-            columns = kwargs.pop("columns", None)
-            index = kwargs.pop("index", None)
+        provided_row_count = kwargs.pop("_known_row_count", None)
+        requested_index = kwargs.pop("index", None)
+        requested_index_name = kwargs.pop("index_name", None)
 
-            if index is not None and columns is not None:
-                # Create empty LazyFrame with specified columns and index
+        self._columns_index = None
+
+        if data is None:
+            columns = kwargs.pop("columns", None)
+            if columns is not None:
                 self._df = pl.DataFrame({col: [] for col in columns}).lazy()
-                self._index = index
-                self._index_name = None
-            elif index is not None:
-                # Create empty LazyFrame with specified index
-                self._df = pl.DataFrame().lazy()
-                self._index = index
-                self._index_name = None
             else:
-                # Create empty LazyFrame
                 self._df = pl.DataFrame().lazy()
-                self._index = None
-                self._index_name = None
+            self._index = requested_index
+            self._index_name = requested_index_name
+            self._known_row_count = (
+                provided_row_count if provided_row_count is not None else 0
+            )
         elif isinstance(data, pl.LazyFrame):
-            # Already a LazyFrame
             self._df = data
-            self._index = kwargs.pop("index", None)
-            self._index_name = kwargs.pop("index_name", None)
+            self._index = requested_index
+            self._index_name = requested_index_name
+            self._known_row_count = provided_row_count
         elif isinstance(data, pl.DataFrame):
-            # Convert DataFrame to LazyFrame
             self._df = data.lazy()
-            self._index = kwargs.pop("index", None)
-            self._index_name = kwargs.pop("index_name", None)
-        else:
-            # Handle polarpandas DataFrame or other types
-            if hasattr(data, "_df"):
-                # It's a polarpandas DataFrame
-                if isinstance(data._df, pl.DataFrame):
-                    self._df = data._df.lazy()
-                else:
-                    self._df = data._df  # Already a LazyFrame
-                self._index = kwargs.pop("index", None)
-                self._index_name = kwargs.pop("index_name", None)
+            self._index = requested_index
+            self._index_name = requested_index_name
+            default_rows = data.height
+            self._known_row_count = (
+                provided_row_count if provided_row_count is not None else default_rows
+            )
+        elif hasattr(data, "_df"):
+            base_index = (
+                requested_index
+                if requested_index is not None
+                else getattr(data, "_index", None)
+            )
+            base_index_name = (
+                requested_index_name
+                if requested_index_name is not None
+                else getattr(data, "_index_name", None)
+            )
+
+            if isinstance(data._df, pl.DataFrame):
+                polars_df = data._df  # type: ignore[attr-defined]
+                self._df = polars_df.lazy()
+                default_rows = len(data) if hasattr(data, "__len__") else polars_df.height
             else:
-                # Create LazyFrame from data
-                self._df = pl.DataFrame(data, *args, **kwargs).lazy()
-                self._index = kwargs.pop("index", None)
-                self._index_name = kwargs.pop("index_name", None)
+                self._df = data._df  # type: ignore[attr-defined]
+                default_rows = provided_row_count
+
+            self._index = base_index
+            self._index_name = base_index_name
+            self._known_row_count = (
+                provided_row_count if provided_row_count is not None else default_rows
+            )
+        else:
+            polars_df = pl.DataFrame(data, *args, **kwargs)
+            self._df = polars_df.lazy()
+            self._index = requested_index
+            self._index_name = requested_index_name
+            default_rows = polars_df.height
+            self._known_row_count = (
+                provided_row_count if provided_row_count is not None else default_rows
+            )
 
     def collect(self) -> "DataFrame":
         """
@@ -198,22 +218,62 @@ class LazyFrame:
         from polarpandas.frame import DataFrame
 
         materialized = self._materialize()
+        self._known_row_count = materialized.height
         return DataFrame(materialized, index=self._index, index_name=self._index_name)
 
     def __repr__(self) -> str:
         """String representation of the LazyFrame."""
-        materialized = self._materialize()
-        return materialized.__repr__()
+        if self._known_row_count is not None:
+            preview_target = min(self._known_row_count, 10)
+            preview_df: Optional[pl.DataFrame] = None
+            try:
+                if self._known_row_count <= 10:
+                    preview_df = self._df.collect()
+                else:
+                    preview_df = self._df.fetch(preview_target)
+            except Exception:
+                preview_df = None
+
+            if preview_df is not None:
+                header = (
+                    f"LazyFrame(rows={self._known_row_count}, "
+                    f"columns={len(preview_df.columns)})"
+                )
+                body = preview_df.__repr__()
+                if self._known_row_count > preview_target:
+                    remaining = self._known_row_count - preview_target
+                    body = f"{body}\n… {remaining} more rows (not shown)"
+                return f"{header}\n{body}"
+
+        schema = self._df.collect_schema()
+        column_names = schema.names()
+        dtypes = schema.dtypes()
+        preview_pairs = ", ".join(
+            f"{name}: {dtype}" for name, dtype in zip(column_names[:4], dtypes[:4])
+        )
+        if len(column_names) > 4:
+            preview_pairs += ", ..."
+        plan_fn = getattr(self._df, "describe_plan", None)
+        plan = plan_fn() if callable(plan_fn) else self._df.explain()
+        return (
+            "LazyFrame(\n"
+            f"  columns={len(column_names)}, schema={{ {preview_pairs} }}\n"
+            ")\n"
+            f"{plan}"
+        )
 
     def __str__(self) -> str:
         """String representation of the LazyFrame."""
-        materialized = self._materialize()
-        return materialized.__str__()
+        return self.__repr__()
 
     def __len__(self) -> int:
         """Length of the LazyFrame."""
-        materialized = self._materialize()
-        return len(materialized)
+        if self._known_row_count is not None:
+            return self._known_row_count
+        raise TypeError(
+            "len() is not defined for LazyFrame without a known row count. "
+            "Call '.collect()' to materialize rows."
+        )
 
     def __getitem__(self, key: Union[str, List[str]]) -> Union["LazyFrame", "Series"]:
         """
@@ -277,19 +337,25 @@ class LazyFrame:
     @property
     def shape(self) -> Tuple[int, int]:
         """Shape of the LazyFrame."""
-        materialized = self._materialize()
-        return materialized.shape
+        schema = self._df.collect_schema()
+        if self._known_row_count is None:
+            return (None, len(schema.names()))
+        return (self._known_row_count, len(schema.names()))
 
     @property
     def height(self) -> int:
         """Number of rows in the LazyFrame."""
-        materialized = self._materialize()
-        return materialized.height
+        if self._known_row_count is not None:
+            return self._known_row_count
+        raise TypeError(
+            "height is not available for LazyFrame without materializing. "
+            "Call '.collect()' first."
+        )
 
     @property
     def width(self) -> int:
         """Number of columns in the LazyFrame."""
-        return len(self.columns)
+        return len(self._df.collect_schema().names())
 
     @property
     def dtypes(self) -> Dict[str, Any]:
@@ -341,23 +407,44 @@ class LazyFrame:
         """Join with another LazyFrame or DataFrame."""
         from typing import Literal, cast
 
-        if hasattr(other, "_df"):
-            other_df = other._df
-            if isinstance(other_df, pl.DataFrame):
-                other_df_lazy: pl.LazyFrame = other_df.lazy()
-            elif isinstance(other_df, pl.LazyFrame):
-                other_df_lazy = other_df
-            # No else clause needed - other_df should always be pl.DataFrame or pl.LazyFrame
-        # No else needed - other should always have _df attribute based on type annotation
+        other_lazy: Optional[pl.LazyFrame] = None
+        if isinstance(other, LazyFrame):
+            other_lazy = other._df
+        elif hasattr(other, "_df"):
+            other_df = other._df  # type: ignore[attr-defined]
+            if isinstance(other_df, pl.LazyFrame):
+                other_lazy = other_df
+            elif isinstance(other_df, pl.DataFrame):
+                other_lazy = other_df.lazy()
+        elif isinstance(other, pl.LazyFrame):
+            other_lazy = other
+        elif isinstance(other, pl.DataFrame):
+            other_lazy = other.lazy()
 
-        # Cast how to Literal type for Polars join method
-        how_literal: Literal[
-            "inner", "left", "right", "full", "semi", "anti", "cross", "outer"
-        ] = cast(
-            "Literal['inner', 'left', 'right', 'full', 'semi', 'anti', 'cross', 'outer']",
+        if other_lazy is None:
+            raise TypeError(
+                "Join partner must be a PolarPandas DataFrame/LazyFrame or a Polars "
+                "DataFrame/LazyFrame."
+            )
+
+        valid_hows: Tuple[str, ...] = (
+            "inner",
+            "left",
+            "right",
+            "full",
+            "semi",
+            "anti",
+            "cross",
+            "outer",
+        )
+        if how not in valid_hows:
+            raise ValueError(f"Unsupported join type '{how}'.")
+
+        how_literal = cast(
+            "Literal['inner','left','right','full','semi','anti','cross','outer']",
             how,
         )
-        result_lazy = self._df.join(other_df_lazy, on=on, how=how_literal, **kwargs)
+        result_lazy = self._df.join(other_lazy, on=on, how=how_literal, **kwargs)
         return LazyFrame(result_lazy)
 
     def to_pandas(self) -> Any:
@@ -392,13 +479,15 @@ class LazyFrame:
 
     def info(self) -> None:
         """Print information about the LazyFrame."""
-        materialized = self._materialize()
-        print(f"LazyFrame shape: {materialized.shape}")
-        print(f"Columns: {materialized.columns}")
-        print("Data types:")
-        schema = materialized.schema
-        for col, dtype in schema.items():
-            print(f"  {col}: {dtype}")
+        schema = self._df.collect_schema()
+        column_names = schema.names()
+        dtypes = schema.dtypes()
+        print(
+            f"LazyFrame with {len(column_names)} columns; "
+            "row count unknown until collect()."
+        )
+        for name, dtype in zip(column_names, dtypes):
+            print(f"  - {name}: {dtype}")
 
     def __getattr__(self, name: str) -> Any:
         """Delegate unknown attributes to the underlying LazyFrame."""

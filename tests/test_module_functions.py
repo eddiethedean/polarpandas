@@ -4,6 +4,7 @@ Test module-level pandas-compatible functions.
 
 import os
 import tempfile
+from datetime import datetime
 
 import polarpandas as ppd
 
@@ -213,10 +214,8 @@ class TestModuleDatetimeFunctions:
         with pytest.raises(ValueError, match="Unsupported type"):
             ppd.to_datetime(123)  # Integer not supported
 
-        with pytest.raises(ValueError, match="Unsupported type"):
-            ppd.to_datetime(
-                "2021-01-01"
-            )  # String not supported (only list or DataFrame)
+        result = ppd.to_datetime("2021-01-01")
+        assert result == datetime(2021, 1, 1)
 
 
 class TestModuleUtilityFunctions:

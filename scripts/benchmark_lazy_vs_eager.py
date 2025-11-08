@@ -248,19 +248,19 @@ def benchmark_io_operations():
 
     # Create a large CSV file
     large_df = create_test_data(500_000)
-    temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False)
-    temp_file.close()
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as temp_file:
+        temp_path = temp_file.name
 
     try:
         # Write test data
-        large_df.write_csv(temp_file.name)
-        file_size = os.path.getsize(temp_file.name) / (1024 * 1024)  # MB
-        print(f"Created test file: {temp_file.name} ({file_size:.1f} MB)")
+        large_df.write_csv(temp_path)
+        file_size = os.path.getsize(temp_path) / (1024 * 1024)  # MB
+        print(f"Created test file: {temp_path} ({file_size:.1f} MB)")
 
         # Benchmark eager reading
         print("\n🔄 Eager CSV reading...")
         start_time = time.time()
-        eager_df = pl.read_csv(temp_file.name)
+        eager_df = pl.read_csv(temp_path)
         eager_time = time.time() - start_time
         print(f"   Time: {eager_time:.3f}s")
         print(f"   Shape: {eager_df.shape}")
@@ -268,7 +268,7 @@ def benchmark_io_operations():
         # Benchmark lazy reading
         print("\n⚡ Lazy CSV reading...")
         start_time = time.time()
-        lazy_df = pl.scan_csv(temp_file.name)
+        lazy_df = pl.scan_csv(temp_path)
         lazy_time = time.time() - start_time
         print(f"   Time: {lazy_time:.3f}s")
         print(f"   Schema: {lazy_df.schema}")
@@ -276,9 +276,9 @@ def benchmark_io_operations():
         # Benchmark PolarPandas lazy reading
         print("\n🚀 PolarPandas lazy CSV reading...")
         start_time = time.time()
-        pp_df = DataFrame.read_csv(temp_file.name)
-        pp_time = time.time() - start_time
-        print(f"   Time: {pp_time:.3f}s")
+        pp_df = DataFrame.read_csv(temp_path)
+        pp_lazy_time = time.time() - start_time
+        print(f"   Time: {pp_lazy_time:.3f}s")
         print(f"   Shape: {pp_df.shape}")
 
         print("\n📊 I/O Performance Summary:")
@@ -287,12 +287,13 @@ def benchmark_io_operations():
             f"   Lazy reading:      {lazy_time:.3f}s ({eager_time / lazy_time:.1f}x faster)"
         )
         print(
-            f"   PolarPandas lazy:  {pp_time:.3f}s ({eager_time / pp_time:.1f}x faster)"
+            f"   PolarPandas lazy:  {pp_lazy_time:.3f}s ({eager_time / pp_lazy_time:.1f}x faster)"
         )
 
     finally:
         # Cleanup
-        os.unlink(temp_file.name)
+        os.unlink(temp_path)
+        print("\n🧹 Cleaning up temporary files...")
 
 
 def run_comprehensive_benchmark():

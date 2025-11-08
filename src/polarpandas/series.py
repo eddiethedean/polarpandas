@@ -4,7 +4,6 @@ Series implementation wrapping Polars Series with pandas-like API.
 
 from __future__ import annotations
 
-import builtins
 import contextlib
 import sys
 from typing import (
@@ -22,7 +21,7 @@ from typing import (
 import polars as pl
 
 if TYPE_CHECKING:
-    from .frame import DataFrame
+    from .frame import DataFrame  # noqa: F401
 
 
 class Series:
@@ -882,9 +881,9 @@ class Series:
 
     def rank(
         self,
-        method: builtins.str = "average",
+        method: str = "average",
         ascending: bool = True,
-        na_option: builtins.str = "keep",
+        na_option: str = "keep",
         pct: bool = False,
     ) -> Series:
         """
@@ -4738,14 +4737,6 @@ class Series:
         """List accessor."""
         raise NotImplementedError("list accessor is not yet implemented")
 
-    @property  # type: ignore[no-redef]
-    def str(self) -> Any:
-        """String accessor (already implemented)."""
-        from .series import _StringAccessor
-
-        return _StringAccessor(self)
-
-    @property
     def struct(self) -> Any:
         """Struct accessor."""
         raise NotImplementedError("struct accessor is not yet implemented")
@@ -5522,6 +5513,7 @@ class _StringAccessor:
             result_df._df = result_df._df.rename(
                 dict(zip(df_unnested.columns, new_columns))
             )
+            result_df._columns_index = list(range(num_cols))
 
             return result_df
         else:
@@ -5557,7 +5549,9 @@ class _StringAccessor:
             df = pl.DataFrame({self._series.name or "0": extracted})
 
             # For extract, we don't need to_struct since extract returns strings, not lists
-            return ppd.DataFrame(df)
+            result_df = ppd.DataFrame(df)
+            result_df._columns_index = list(range(len(df.columns)))
+            return result_df
         else:
             return Series(self._series.str.extract(pat))
 
