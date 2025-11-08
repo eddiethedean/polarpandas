@@ -21,11 +21,72 @@ Examples
 >>> result = ppd.concat([df1, df2])
 """
 
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from datetime import date, datetime
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
+
+from dateutil import parser as du_parser
 
 from . import utils
 from .frame import DataFrame
 from .series import Series
+
+
+def _deep_get(obj: Any, path: Sequence[Any]) -> Any:
+    current = obj
+    for key in path:
+        if isinstance(current, dict):
+            current = current.get(key)
+        elif isinstance(current, list) and isinstance(key, int):
+            if 0 <= key < len(current):
+                current = current[key]
+            else:
+                return None
+        else:
+            return None
+        if current is None:
+            return None
+    return current
+
+
+def _flatten_dict(
+    obj: Dict[str, Any],
+    *,
+    parent_key: str = "",
+    sep: str = ".",
+    level: int = 0,
+    max_level: Optional[int] = None,
+) -> Dict[str, Any]:
+    items: Dict[str, Any] = {}
+    for key, value in obj.items():
+        new_key = f"{parent_key}{sep}{key}" if parent_key else str(key)
+        if isinstance(value, dict) and (max_level is None or level < max_level):
+            items.update(
+                _flatten_dict(
+                    value,
+                    parent_key=new_key,
+                    sep=sep,
+                    level=level + 1,
+                    max_level=max_level,
+                )
+            )
+        else:
+            items[new_key] = value
+    return items
+
+
+def _collect_meta_values(
+    obj: Dict[str, Any],
+    meta_paths: Sequence[Sequence[Any]],
+    *,
+    sep: str,
+    meta_prefix: Optional[str],
+) -> Dict[str, Any]:
+    values: Dict[str, Any] = {}
+    for path in meta_paths:
+        key_name = sep.join(str(p) for p in path)
+        full_key = f"{meta_prefix}{key_name}" if meta_prefix else key_name
+        values[full_key] = _deep_get(obj, path)
+    return values
 
 
 def concat(objs: List[DataFrame], axis: int = 0, **kwargs: Any) -> DataFrame:
@@ -1060,29 +1121,80 @@ def json_normalize(
     >>> data = [{"name": "A", "values": [1, 2]}, {"name": "B", "values": [3, 4]}]
     >>> result = ppd.json_normalize(data)
     """
-    try:
-        import pandas as pd
+    if kwargs:
+        unsupported = ", ".join(sorted(kwargs.keys()))
+        raise NotImplementedError(f"Unsupported keyword arguments for json_normalize(): {unsupported}")
 
-        # Use pandas to normalize, then convert
-        pd_df = pd.json_normalize(
-            data=data,
-            record_path=record_path,
-            meta=meta,
-            meta_prefix=meta_prefix,
-            record_prefix=record_prefix,
-            errors=errors,
-            sep=sep,
-            max_level=max_level,
-            **kwargs,
-        )
-        return DataFrame(pd_df)
-    except ImportError:
-        raise NotImplementedError(
-            "json_normalize() requires pandas.\n"
-            "Workarounds:\n"
-            "  - Install pandas: pip install pandas\n"
-            "  - Use pandas: pd.json_normalize(data) then convert with polarpandas.DataFrame(df)"
-        ) from None
+    if isinstance(data, dict):
+        records = [data]
+    elif isinstance(data, list):
+        records = data
+    else:
+        raise TypeError("data must be dict or list of dicts for json_normalize().")
+
+    if record_path is None:
+        flattened = []
+        for obj in records:
+            if not isinstance(obj, dict):
+                raise TypeError("Each element must be a dict when record_path is None.")
+            flattened.append(
+                _flatten_dict(
+                    obj,
+                    sep=sep,
+                    max_level=max_level,
+                )
+            )
+        return DataFrame(flattened)
+
+    if isinstance(record_path, (list, tuple)):
+        record_keys = list(record_path)
+    else:
+        record_keys = [record_path]
+
+    meta_paths: List[List[Any]] = []
+    if meta is not None:
+        if isinstance(meta, (list, tuple)):
+            for entry in meta:
+                if isinstance(entry, (list, tuple)):
+                    meta_paths.append(list(entry))
+                else:
+                    meta_paths.append([entry])
+        else:
+            meta_paths.append([meta])
+
+    normalized_rows: List[Dict[str, Any]] = []
+    for obj in records:
+        if not isinstance(obj, dict):
+            raise TypeError("json_normalize() expects each element to be a dict.")
+
+        meta_values = _collect_meta_values(obj, meta_paths, sep=sep, meta_prefix=meta_prefix)
+        target = _deep_get(obj, record_keys)
+
+        if target is None:
+            if errors == "ignore":
+                continue
+            raise KeyError(f"record_path {record_keys} not found in object.")
+
+        if not isinstance(target, list):
+            raise TypeError("record_path should point to a list of records.")
+
+        for entry in target:
+            if isinstance(entry, dict):
+                flattened_entry = _flatten_dict(
+                    entry,
+                    sep=sep,
+                    max_level=max_level,
+                )
+            else:
+                flattened_entry = {"value": entry}
+
+            row: Dict[str, Any] = dict(meta_values)
+            for key, value in flattened_entry.items():
+                full_key = f"{record_prefix}{key}" if record_prefix else key
+                row[full_key] = value
+            normalized_rows.append(row)
+
+    return DataFrame(normalized_rows)
 
 
 # Configuration functions - simplified stubs
@@ -1278,6 +1390,7 @@ def show_versions(as_json: bool = False, **kwargs: Any) -> Optional[str]:
     >>> import polarpandas as ppd
     >>> ppd.show_versions()
     """
+    import importlib
     import json
     import sys
 
@@ -1287,12 +1400,10 @@ def show_versions(as_json: bool = False, **kwargs: Any) -> Optional[str]:
         "python": sys.version,
     }
 
-    try:
-        import pandas as pd
-
-        versions["pandas"] = pd.__version__
-    except ImportError:
-        pass
+    pandas_spec = importlib.util.find_spec("pandas")
+    if pandas_spec is not None:
+        pandas_module = importlib.import_module("pandas")
+        versions["pandas"] = getattr(pandas_module, "__version__", "unknown")
 
     if as_json:
         return json.dumps(versions, indent=2)
@@ -1350,20 +1461,69 @@ def infer_freq(index: Any, **kwargs: Any) -> Optional[str]:
     >>> freq = ppd.infer_freq(index)
     """
     # Simplified implementation
-    try:
-        import pandas as pd
+    if kwargs:
+        unsupported = ", ".join(sorted(kwargs.keys()))
+        raise NotImplementedError(f"Unsupported keyword arguments for infer_freq(): {unsupported}")
 
-        if hasattr(index, "to_pandas"):
-            pd_index = index.to_pandas()
-        elif hasattr(index, "_index"):
-            pd_index = pd.Index(index._index)
-        else:
-            pd_index = pd.Index(index)
-        freq_result: Optional[str] = pd.infer_freq(pd_index, **kwargs)
-        return freq_result
-    except ImportError:
-        # Fallback: try to detect pattern
-        if hasattr(index, "__len__") and len(index) > 1:
-            # Very basic frequency detection
-            return None
+    if hasattr(index, "to_list"):
+        values = list(index.to_list())
+    elif hasattr(index, "_index"):
+        values = list(index._index)
+    else:
+        values = list(index)
+
+    if len(values) < 3:
         return None
+
+    converted: List[datetime] = []
+    for value in values:
+        if isinstance(value, datetime):
+            converted.append(value)
+        elif isinstance(value, date):
+            converted.append(datetime(value.year, value.month, value.day))
+        elif isinstance(value, str):
+            try:
+                converted.append(du_parser.isoparse(value))
+            except Exception:
+                return None
+        else:
+            return None
+
+    for idx in range(len(converted) - 1):
+        if converted[idx + 1] <= converted[idx]:
+            return None
+
+    deltas = [converted[i + 1] - converted[i] for i in range(len(converted) - 1)]
+    delta_days = {delta.days for delta in deltas}
+
+    # Business day detection
+    if all(dt.weekday() < 5 for dt in converted):
+        if delta_days.issubset({1, 3}):
+            return "B"
+
+    # Daily / Weekly
+    unique_seconds = {delta.total_seconds() for delta in deltas}
+    if unique_seconds == {86400.0}:
+        return "D"
+    if unique_seconds == {604800.0}:
+        return "W"
+    if unique_seconds == {3600.0}:
+        return "H"
+    if unique_seconds == {60.0}:
+        return "T"
+    if unique_seconds == {1.0}:
+        return "S"
+
+    # Monthly / Quarterly / Yearly detection
+    months = [dt.year * 12 + dt.month for dt in converted]
+    month_steps = {months[i + 1] - months[i] for i in range(len(months) - 1)}
+    if len(month_steps) == 1:
+        step = month_steps.pop()
+        if step == 1 and all(dt.day == converted[0].day for dt in converted):
+            return "M"
+        if step == 3 and all(dt.day == converted[0].day for dt in converted):
+            return "Q"
+        if step == 12 and all(dt.month == converted[0].month and dt.day == converted[0].day for dt in converted):
+            return "Y"
+
+    return None

@@ -5,10 +5,73 @@ This test file focuses on increasing coverage of operations.py by testing
 functions like concat, merge, pivot, melt, get_dummies, etc.
 """
 
+from datetime import datetime
+
 import pytest
 
 import polarpandas as ppd
 from polarpandas import operations
+from tests.test_helpers import assert_frame_equal
+
+
+class TestJsonNormalize:
+    """Tests for json_normalize helper."""
+
+    def test_json_normalize_flatten(self):
+        payload = [
+            {
+                "city": {"name": "NYC", "code": 1},
+                "value": 10,
+            }
+        ]
+        result = operations.json_normalize(payload, sep=".")
+        assert_frame_equal(result, {"city.name": ["NYC"], "city.code": [1], "value": [10]})
+
+    def test_json_normalize_with_record_path_and_meta(self):
+        payload = [
+            {
+                "metadata": {"country": "US"},
+                "measurements": [
+                    {"day": "2024-01-01", "temp": 20},
+                    {"day": "2024-01-02", "temp": 22},
+                ],
+            }
+        ]
+        result = operations.json_normalize(
+            payload,
+            record_path=["measurements"],
+            meta=[["metadata", "country"]],
+            record_prefix="r_",
+            sep=".",
+        )
+        assert_frame_equal(
+            result,
+            {
+                "metadata.country": ["US", "US"],
+                "r_day": ["2024-01-01", "2024-01-02"],
+                "r_temp": [20, 22],
+            },
+        )
+
+
+class TestInferFreq:
+    """Tests for infer_freq helper."""
+
+    def test_infer_freq_daily(self):
+        idx = [datetime(2023, 1, 1), datetime(2023, 1, 2), datetime(2023, 1, 3)]
+        assert operations.infer_freq(idx) == "D"
+
+    def test_infer_freq_hourly(self):
+        idx = [datetime(2023, 1, 1, hour=h) for h in range(3)]
+        assert operations.infer_freq(idx) == "H"
+
+    def test_infer_freq_business(self):
+        idx = [
+            datetime(2023, 1, 2),  # Monday
+            datetime(2023, 1, 3),
+            datetime(2023, 1, 4),
+        ]
+        assert operations.infer_freq(idx) == "B"
 
 
 class TestConcatOperations:

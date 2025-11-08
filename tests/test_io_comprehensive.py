@@ -99,7 +99,7 @@ class TestCSVIO:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as tmp:
             path = tmp.name
         try:
-            with pytest.raises(EmptyDataError):
+            with pytest.raises(ValueError, match="No columns to parse from file"):
                 ppd.read_csv(path)
         finally:
             os.unlink(path)
@@ -141,7 +141,7 @@ class TestCSVIO:
 class TestIoFallbacks:
     """Optional dependency fallbacks."""
 
-    def test_read_clipboard_without_pandas(self, monkeypatch):
+    def test_read_clipboard_without_pyperclip(self, monkeypatch):
         import builtins
 
         import polarpandas.io as io_mod
@@ -149,15 +149,15 @@ class TestIoFallbacks:
         original_import = builtins.__import__
 
         def fake_import(name, *args, **kwargs):
-            if name == "pandas":
-                raise ImportError("pandas unavailable for clipboard test")
+            if name == "pyperclip":
+                raise ImportError("pyperclip unavailable for clipboard test")
             return original_import(name, *args, **kwargs)
 
         monkeypatch.setattr("builtins.__import__", fake_import)
         with pytest.raises(NotImplementedError):
             io_mod.read_clipboard()
 
-    def test_read_html_without_pandas(self, monkeypatch):
+    def test_read_html_without_bs4(self, monkeypatch):
         import builtins
 
         import polarpandas.io as io_mod
@@ -165,8 +165,8 @@ class TestIoFallbacks:
         original_import = builtins.__import__
 
         def fake_import(name, *args, **kwargs):
-            if name == "pandas":
-                raise ImportError("pandas unavailable for html test")
+            if name == "bs4":
+                raise ImportError("bs4 unavailable for html test")
             return original_import(name, *args, **kwargs)
 
         monkeypatch.setattr("builtins.__import__", fake_import)
@@ -192,6 +192,35 @@ class TestIoFallbacks:
     def test_read_iceberg_not_implemented(self):
         with pytest.raises(NotImplementedError):
             ppd.read_iceberg("s3://bucket/table")
+
+    def test_read_html_basic(self):
+        pytest.importorskip("bs4")
+        pytest.importorskip("lxml")
+
+        html_text = """
+        <html>
+          <body>
+            <table id="data">
+              <tr><th>A</th><th>B</th></tr>
+              <tr><td>1</td><td>10</td></tr>
+              <tr><td>2</td><td>20</td></tr>
+            </table>
+          </body>
+        </html>
+        """
+
+        tables = ppd.read_html(html_text)
+        assert len(tables) == 1
+        assert_frame_equal(tables[0], {"A": ["1", "2"], "B": ["10", "20"]})
+
+    def test_read_clipboard_basic(self, monkeypatch):
+        pytest.importorskip("pyperclip")
+
+        import polarpandas.io as io_mod
+
+        monkeypatch.setattr("pyperclip.paste", lambda: "A\tB\n1\t2\n")
+        df = io_mod.read_clipboard()
+        assert_frame_equal(df, {"A": ["1"], "B": ["2"]})
 
 
 class TestJSONIO:

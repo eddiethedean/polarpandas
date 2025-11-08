@@ -68,14 +68,16 @@ Polarpandas is a pure Polars library and does not depend on pandas. Some pandas 
 - **Note**: All 57 string accessor methods are implemented
 
 ### 10. Optional Dependencies
-- **Issue**: Some I/O operations require optional dependencies
-- **Reason**: To keep the core package lightweight, certain file format support requires additional packages
+- **Issue**: Some I/O utilities rely on lightweight third-party packages
+- **Reason**: The core distribution is kept minimal; format-specific features pull in optional extras
 - **Status**: PERMANENT — by design
-- **Workaround**: Install optional dependencies as needed:
-  - `pip install polarpandas[excel]` for Excel support
-  - `pip install polarpandas[hdf5]` for HDF5 support
-  - `pip install polarpandas[html]` for HTML/XML support
-  - `pip install polarpandas[all]` for all optional features
+- **Workaround**: Install optional extras as required:
+  - `pip install polarpandas[excel]` for Excel export (`xlsxwriter`)
+  - `pip install polarpandas[html]` for HTML/XML ingestion (`beautifulsoup4`, `lxml`, `html5lib`)
+  - `pip install polarpandas[clipboard]` for clipboard helpers (`pyperclip`)
+  - `pip install polarpandas[spss]` / `[sas]` for SAS/SPSS/Stata (`pyreadstat`, `sas7bdat`)
+  - `pip install polarpandas[pandas]` only if you need `to_pandas()`/`from_pandas()` conversions
+  - `pip install polarpandas[all]` to bring in every optional dependency at once
 
 ### 11. NaN Representation in String Columns
 - **Issue**: Mixed string/numeric columns with `NaN` render differently from pandas

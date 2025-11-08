@@ -33,6 +33,8 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     "polars>=0.15.8",
+    "numpy>=1.20.0",
+    "python-dateutil>=2.8.2",
 ]
 
 [project.optional-dependencies]
@@ -70,12 +72,13 @@ hdf5 = [
 html = [
     "lxml>=4.0.0",  # For HTML/XML parsing (read_html, read_xml, to_xml)
     "html5lib>=1.1",  # Alternative HTML parser (read_html)
+    "beautifulsoup4>=4.11.0",  # HTML parsing helper (read_html)
 ]
 spss = [
-    "pyreadstat>=1.0.0",  # For SPSS/Stata file I/O (read_spss, to_stata)
+    "pyreadstat>=1.2.0",  # For SPSS/Stata file I/O (read_spss, read_stata, read_sas)
 ]
 sas = [
-    "sas7bdat>=2.0.0",  # For SAS file I/O (read_sas)
+    "sas7bdat>=2.0.0",  # Optional SAS backend
 ]
 xarray = [
     "xarray>=2022.0.0",  # For xarray conversion (to_xarray)
@@ -95,7 +98,6 @@ docs = [
     "sphinx-rtd-theme>=1.0.0",
 ]
 all = [
-    "pandas>=1.5.0",
     "numpy>=1.20.0",
     "openpyxl>=3.0.0",
     "xlsxwriter>=3.0.0",
@@ -103,7 +105,8 @@ all = [
     "tables>=3.8.0",
     "lxml>=4.0.0",
     "html5lib>=1.1",
-    "pyreadstat>=1.0.0",
+    "beautifulsoup4>=4.11.0",
+    "pyreadstat>=1.2.0",
     "sas7bdat>=2.0.0",
     "xarray>=2022.0.0",
     "pyperclip>=1.8.0",
@@ -117,9 +120,6 @@ Homepage = "https://github.com/eddiethedean/polarpandas"
 Repository = "https://github.com/eddiethedean/polarpandas"
 Documentation = "https://github.com/eddiethedean/polarpandas#readme"
 "Bug Tracker" = "https://github.com/eddiethedean/polarpandas/issues"
-
-[project.scripts]
-polarpandas = "polarpandas.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

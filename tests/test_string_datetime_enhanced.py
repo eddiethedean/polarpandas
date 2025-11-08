@@ -326,10 +326,10 @@ class TestDatetimeModuleFunctions:
         """Period and interval helpers should return simple labelled Series."""
 
         period_result = ppd.period_range("2023-01", periods=2, freq="M")
-        assert period_result.to_list() == ["2023-01", "2023-01"]
+        assert period_result.to_list() == ["2023-01", "2023-02"]
 
         interval_result = ppd.interval_range(start=0, end=4, periods=2)
-        assert interval_result.to_list() == ["[0.0, 2.0)", "[2.0, 4.0)"]
+        assert interval_result.to_list() == ["[0, 2)", "[2, 4)"]
 
     def test_to_timedelta_variants(
         self, timedelta_string_series: ppd.Series, timezone_datetime_strings

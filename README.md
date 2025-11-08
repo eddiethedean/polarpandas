@@ -179,22 +179,27 @@ pip install -e .
 pip install polarpandas
 
 # Install with optional features
-pip install polarpandas[sqlalchemy]  # For enhanced SQL features (primary keys, auto-increment)
-pip install polarpandas[excel]       # For Excel file support
-pip install polarpandas[all]         # Install all optional dependencies
+pip install polarpandas[sqlalchemy]  # Enhanced SQL features (primary keys, auto-increment)
+pip install polarpandas[excel]       # Excel export via xlsxwriter
+pip install polarpandas[html]        # read_html / read_xml via beautifulsoup4 + lxml/html5lib
+pip install polarpandas[clipboard]   # Clipboard integration via pyperclip
+pip install polarpandas[spss]        # SAS/SPSS/Stata I/O via pyreadstat
+pip install polarpandas[pandas]      # Opt-in pandas interoperability helpers (to_pandas, etc.)
+pip install polarpandas[all]         # Install every optional dependency
 ```
 
 **Requirements:** Python 3.8+ and Polars
 
-**Optional Dependencies:**
-- `numpy` - For passing NumPy dtype objects like `np.int64` in schemas
-- `sqlalchemy` - For enhanced SQL features (primary keys, auto-increment in `to_sql()`)
-- `pandas` - For certain conversion features and compatibility
-- `openpyxl`, `xlsxwriter` - For Excel file I/O
-- `lxml`, `html5lib` - For HTML/XML parsing
-- `pyreadstat`, `sas7bdat` - For SPSS/SAS file support
-- `types-tabulate` - Lightweight type stubs to keep `tabulate`-powered helpers mypy-clean
-- And more... see `pyproject.toml` for complete list
+**Optional Dependencies (install the extras you need):**
+- `python-dateutil` *(bundled)* – powers the datetime helpers with no pandas dependency
+- `numpy` – only required when you pass NumPy dtypes inside schema dictionaries
+- `sqlalchemy` – enables `to_sql()` primary-key / auto-increment features (`polarpandas[sqlalchemy]`)
+- `xlsxwriter` – Excel export (`polarpandas[excel]`)
+- `lxml`, `html5lib`, `beautifulsoup4` – HTML/XML readers (`polarpandas[html]`)
+- `pyperclip` – Clipboard utilities (`polarpandas[clipboard]`)
+- `pyreadstat`, `sas7bdat` – SAS/SPSS/Stata ingestion (`polarpandas[spss]`, `polarpandas[sas]`)
+- `pandas` – *optional*; only needed for the explicit conversion helpers (`to_pandas`, `from_pandas`)
+- See `pyproject.toml` for the full catalogue of extras (e.g., `formatting`, `docs`, `dev`, `all`)
 
 ## 🔥 Core Features
 

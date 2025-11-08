@@ -27,6 +27,8 @@ Notes
 """
 
 import contextlib
+import io
+import math
 import operator
 from typing import (
     TYPE_CHECKING,
@@ -410,24 +412,10 @@ class DataFrame:
             pl_df = pl.read_csv(path, **polars_kwargs)
             df = cls(pl_df)
         except Exception as e:
-            # Convert Polars exceptions to pandas-compatible ones
-            if "empty" in str(e).lower() or "NoDataError" in str(type(e)):
-                # Convert to pandas EmptyDataError
-                try:
-                    import pandas as pd
-
-                    raise pd.errors.EmptyDataError(
-                        "No columns to parse from file"
-                    ) from e
-                except ImportError:
-                    raise ValueError(
-                        f"No columns to parse from file: {e}\n"
-                        "Possible causes:\n"
-                        "  - File is empty or has no header row\n"
-                        "  - All columns were skipped\n"
-                        "  - File format is not recognized\n"
-                        "Check file contents and try specifying columns explicitly."
-                    ) from e
+            if "empty" in str(e).lower() or "nodataerror" in str(type(e)).lower():
+                raise ValueError(
+                    "No columns to parse from file. Ensure the file contains data or specify column names explicitly."
+                ) from e
             raise
 
         # Handle index_col if specified
@@ -2906,34 +2894,11 @@ class DataFrame:
                     try:
                         # Attempt to create DataFrame from the object
                         other_lazy = pl.DataFrame(other_polars).lazy()
-                    except (TypeError, ValueError):
-                        # Fallback: try to convert via pandas
-                        try:
-                            import pandas as pd
-
-                            # Convert to pandas first, then to Polars
-                            if hasattr(other_polars, "to_pandas"):
-                                pd_df = other_polars.to_pandas()
-                            else:
-                                # Try to convert via to_dict if available
-                                if hasattr(other_polars, "to_dict"):
-                                    pd_df = pd.DataFrame(other_polars.to_dict())
-                                else:
-                                    # Last resort: try to iterate
-                                    try:
-                                        pd_df = pd.DataFrame(list(other_polars))
-                                    except (TypeError, ValueError) as e:
-                                        raise TypeError(
-                                            f"Cannot convert {type(other_polars).__name__} to pandas DataFrame. "
-                                            "Object must support to_pandas(), to_dict(), or be iterable."
-                                        ) from e
-                            other_lazy = pl.from_pandas(pd_df).lazy()
-                        except (ImportError, AttributeError, TypeError) as e:
-                            raise TypeError(
-                                f"Cannot convert {type(other_polars).__name__} to LazyFrame. "
-                                "Supported types: polarpandas.DataFrame, polars.DataFrame, "
-                                "polars.LazyFrame. For other types, pandas may be required."
-                            ) from e
+                    except (TypeError, ValueError) as conversion_error:
+                        raise TypeError(
+                            f"Cannot convert {type(other_polars).__name__} to LazyFrame. "
+                            "Supported types: polarpandas.DataFrame, polars.DataFrame, polars.LazyFrame."
+                        ) from conversion_error
             except (AttributeError, TypeError) as e:
                 raise TypeError(
                     f"Cannot convert {type(other_polars).__name__} to LazyFrame. "
@@ -10368,19 +10333,51 @@ class DataFrame:
         >>> df = ppd.DataFrame({"A": [1, 2]})
         >>> df.to_clipboard()
         """
-        try:
-            import pandas as pd  # noqa: F401
-
-            # Convert to pandas and use its clipboard functionality
-            pd_df = self.to_pandas()
-            pd_df.to_clipboard(excel=excel, sep=sep, **kwargs)
-        except ImportError:
+        if kwargs:
+            unsupported = ", ".join(sorted(kwargs.keys()))
             raise NotImplementedError(
-                "to_clipboard() requires pandas.\n"
-                "Workarounds:\n"
-                "  - Install pandas: pip install pandas\n"
-                "  - Use pandas: pd_df.to_clipboard()"
-            ) from None
+                f"Unsupported keyword arguments for to_clipboard(): {unsupported}"
+            )
+
+        try:
+            import pyperclip
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise NotImplementedError(
+                "to_clipboard() requires the 'pyperclip' package.\n"
+                "Install with: pip install pyperclip"
+            ) from exc
+
+        delimiter = "\t" if excel else (sep or "\t")
+
+        index_values = (
+            list(self._index)
+            if self._index is not None
+            else list(range(len(self._df)))
+        )
+        column_names = list(self.columns)
+
+        if isinstance(self._index_name, tuple):
+            index_header = ", ".join(str(name) for name in self._index_name if name)
+        else:
+            index_header = self._index_name or ""
+
+        rows: List[str] = []
+        header_cells = [index_header] + column_names
+        rows.append(delimiter.join(str(cell) for cell in header_cells))
+
+        for idx_value, row_values in zip(index_values, self._df.iter_rows(named=False)):
+            cells = [idx_value] + list(row_values)
+
+            def _format(cell: Any) -> str:
+                if cell is None:
+                    return ""
+                if isinstance(cell, float) and math.isnan(cell):
+                    return ""
+                return str(cell)
+
+            rows.append(delimiter.join(_format(cell) for cell in cells))
+
+        pyperclip.copy("\n".join(rows))
 
     def to_excel(
         self,
@@ -10451,38 +10448,95 @@ class DataFrame:
         >>> df = ppd.DataFrame({"A": [1, 2]})
         >>> df.to_excel("output.xlsx")
         """
-        try:
-            import pandas as pd  # noqa: F401
-
-            # Convert to pandas and use its Excel functionality
-            pd_df = self.to_pandas()
-            pd_df.to_excel(
-                excel_writer=excel_writer,
-                sheet_name=sheet_name,
-                na_rep=na_rep,
-                float_format=float_format,
-                columns=columns,
-                header=header,
-                index=index,
-                index_label=index_label,
-                startrow=startrow,
-                startcol=startcol,
-                engine=engine,
-                merge_cells=merge_cells,
-                encoding=encoding,
-                inf_rep=inf_rep,
-                verbose=verbose,
-                freeze_panes=freeze_panes,
-                storage_options=storage_options,
-                **kwargs,
-            )
-        except ImportError:
+        if kwargs:
+            unsupported = ", ".join(sorted(kwargs.keys()))
             raise NotImplementedError(
-                "to_excel() requires pandas and openpyxl/xlsxwriter.\n"
-                "Workarounds:\n"
-                "  - Install: pip install pandas openpyxl\n"
-                "  - Use pandas: pd_df.to_excel(path)"
-            ) from None
+                f"Unsupported keyword arguments for to_excel(): {unsupported}"
+            )
+        if merge_cells is False or float_format is not None or verbose is not True or freeze_panes is not None:
+            raise NotImplementedError("Advanced Excel options are not supported in the pandas-free implementation.")
+        if storage_options is not None or engine not in (None, "xlsxwriter"):
+            raise NotImplementedError("Only the 'xlsxwriter' engine is supported without pandas.")
+
+        try:
+            import xlsxwriter
+        except ImportError as exc:  # pragma: no cover - optional dependency
+            raise NotImplementedError(
+                "to_excel() requires the 'xlsxwriter' package.\n"
+                "Install with: pip install xlsxwriter"
+            ) from exc
+
+        selected_df = self._df if columns is None else self._df.select(columns)
+        data_rows = list(selected_df.iter_rows(named=False))
+        column_names = list(selected_df.columns)
+
+        include_index = index
+        if include_index:
+            if self._index is not None:
+                index_values = self._index
+            else:
+                index_values = list(range(len(selected_df)))
+        else:
+            index_values = []
+
+        close_workbook = False
+        if isinstance(excel_writer, str):
+            workbook = xlsxwriter.Workbook(excel_writer)
+            close_workbook = True
+        elif hasattr(excel_writer, "add_worksheet"):
+            workbook = excel_writer
+        else:
+            raise TypeError("excel_writer must be a file path or xlsxwriter Workbook instance.")
+
+        worksheet = workbook.add_worksheet(sheet_name)
+
+        current_row = startrow
+        current_col = startcol
+
+        def _format_value(value: Any) -> Any:
+            if value is None:
+                return na_rep
+            if isinstance(value, float):
+                if math.isnan(value):
+                    return na_rep
+                if math.isinf(value):
+                    return inf_rep
+            return value
+
+        if header:
+            headers: List[Any] = []
+            if include_index:
+                if isinstance(header, list):
+                    if index_label is not None:
+                        headers.append(index_label)
+                    else:
+                        headers.append("")
+                    headers.extend(header)
+                else:
+                    headers.append(index_label if index_label is not None else "")
+                    headers.extend(column_names)
+            else:
+                if isinstance(header, list):
+                    headers.extend(header)
+                else:
+                    headers.extend(column_names)
+
+            for offset, value in enumerate(headers):
+                worksheet.write(current_row, current_col + offset, value)
+            current_row += 1
+
+        for row_idx, row_values in enumerate(data_rows):
+            col_offset = current_col
+            if include_index:
+                worksheet.write(current_row, col_offset, _format_value(index_values[row_idx]))
+                col_offset += 1
+            for value in row_values:
+                worksheet.write(current_row, col_offset, _format_value(value))
+                col_offset += 1
+            current_row += 1
+
+        if close_workbook:
+            workbook.close()
 
     def to_hdf(
         self,
@@ -10572,41 +10626,10 @@ class DataFrame:
                         key, data=data, compression=complib, compression_opts=complevel
                     )
         except ImportError:
-            try:
-                import tables as tb  # noqa: F401
-
-                # Convert to pandas-like structure for pytables
-                pd_df = self.to_pandas() if hasattr(self, "to_pandas") else None
-                if pd_df is None:
-                    # Fallback: convert manually
-                    import pandas as pd
-
-                    pd_df = pd.DataFrame(self._df.to_dict(as_series=False))
-                pd_df.to_hdf(
-                    path_or_buf=path_or_buf,
-                    key=key,
-                    mode=mode,
-                    complevel=complevel,
-                    complib=complib,
-                    append=append,
-                    format=format,
-                    index=index,
-                    min_itemsize=min_itemsize,
-                    nan_rep=nan_rep,
-                    dropna=dropna,
-                    data_columns=data_columns,
-                    errors=errors,
-                    encoding=encoding,
-                    **kwargs,
-                )
-            except ImportError:
-                raise NotImplementedError(
-                    "to_hdf() requires h5py or tables (pytables).\n"
-                    "Workarounds:\n"
-                    "  - Install: pip install h5py\n"
-                    "  - Or install: pip install tables\n"
-                    "  - Export to Parquet/CSV first, then convert"
-                ) from None
+            raise NotImplementedError(
+                "to_hdf() requires the 'h5py' package.\n"
+                "Install with: pip install h5py"
+            ) from None
 
     def to_html(
         self,

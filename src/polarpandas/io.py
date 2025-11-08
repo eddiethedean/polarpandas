@@ -31,11 +31,131 @@ Notes
 - Lazy I/O allows Polars to optimize the query plan before execution
 """
 
-from typing import Any, Optional
+import io
+import re
+from pathlib import Path
+from typing import Any, List, Optional
+from urllib.parse import urlparse
+from urllib.request import urlopen
 
 from .frame import DataFrame
 from .lazyframe import LazyFrame
 from .utils import convert_schema_to_polars
+
+
+def _read_text_source(source: Any) -> str:
+    """
+    Load textual content from a filesystem path, HTTP(S) URL, file-like object, or literal string.
+    """
+
+    if hasattr(source, "read"):
+        return source.read()
+
+    if isinstance(source, bytes):
+        return source.decode("utf-8")
+
+    if isinstance(source, str):
+        stripped = source.strip()
+        if stripped.lower().startswith("<"):
+            return source
+
+        parsed = urlparse(source)
+        if parsed.scheme in {"http", "https"}:
+            with urlopen(source) as response:  # pragma: no cover - network disabled in tests
+                return response.read().decode("utf-8")
+
+        path = Path(source)
+        if not path.exists():
+            raise FileNotFoundError(f"HTML source '{source}' does not exist.")
+        return path.read_text(encoding="utf-8")
+
+    raise ValueError(f"Unsupported HTML source type: {type(source)!r}")
+
+
+def _extract_table_rows(table: Any) -> List[List[str]]:
+    """
+    Convert a BeautifulSoup <table> element to a list of string rows.
+    """
+
+    rows: List[List[str]] = []
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["th", "td"])
+        if not cells:
+            continue
+        row = [cell.get_text(strip=True) for cell in cells]
+        rows.append(row)
+    return rows
+
+
+def _rows_to_frame(
+    rows: List[List[str]],
+    *,
+    header: Optional[int],
+    index_col: Optional[int],
+    skiprows: Optional[Any],
+) -> DataFrame:
+    if not rows:
+        return DataFrame()
+
+    data_rows = rows
+    header_row: Optional[List[str]] = None
+
+    if header is not None:
+        if isinstance(header, int):
+            if header < 0 or header >= len(rows):
+                raise ValueError(f"header index {header} is out of range for HTML table.")
+            header_row = rows[header]
+            data_rows = rows[:header] + rows[header + 1 :]
+        else:
+            raise NotImplementedError("header must be an integer when using read_html().")
+    else:
+        first = rows[0]
+        header_row = first
+        data_rows = rows[1:]
+
+    if header_row is None:
+        header_row = [f"column_{i}" for i in range(len(rows[0]))]
+
+    skip_indexes: List[int]
+    if skiprows is None:
+        skip_indexes = []
+    elif isinstance(skiprows, int):
+        skip_indexes = list(range(skiprows))
+    elif isinstance(skiprows, (list, tuple, set)):
+        skip_indexes = sorted(skiprows)
+    else:
+        raise NotImplementedError("skiprows must be an int or sequence when using read_html().")
+
+    filtered_rows = [
+        row
+        for idx, row in enumerate(data_rows)
+        if idx not in skip_indexes
+    ]
+
+    width = max(len(header_row), *(len(row) for row in filtered_rows) or [0])
+    normalized_header = header_row + [f"column_{i}" for i in range(len(header_row), width)]
+
+    normalized_rows = [
+        row + [None] * (width - len(row))
+        for row in filtered_rows
+    ]
+
+    data = {normalized_header[i]: [row[i] for row in normalized_rows] for i in range(width)}
+    frame = DataFrame(data)
+
+    if index_col is not None and normalized_rows:
+        if isinstance(index_col, int):
+            column_keys = list(frame._df.columns)  # type: ignore[attr-defined]
+            if index_col < 0 or index_col >= len(column_keys):
+                raise ValueError("index_col is out of bounds for HTML table.")
+            index_name = column_keys[index_col]
+            frame._index = frame._df[index_name].to_list()
+            frame._index_name = index_name
+            frame._df = frame._df.drop(index_name)
+        else:
+            raise NotImplementedError("index_col must be an integer when using read_html().")
+
+    return frame
 
 
 def read_csv(path: str, **kwargs: Any) -> DataFrame:
@@ -402,18 +522,19 @@ def read_clipboard(sep: str = r"\s+", **kwargs: Any) -> DataFrame:
     >>> df = ppd.read_clipboard()
     """
     try:
-        import pandas as pd
-
-        # Use pandas to read clipboard, then convert
-        pd_df = pd.read_clipboard(sep=sep, **kwargs)
-        return DataFrame(pd_df)
-    except ImportError:
+        import pyperclip
+    except ImportError as exc:  # pragma: no cover - dependency optional
         raise NotImplementedError(
-            "read_clipboard() requires pandas.\n"
-            "Workarounds:\n"
-            "  - Install pandas: pip install pandas\n"
-            "  - Copy data to file, then use read_csv()"
-        ) from None
+            "read_clipboard() requires the 'pyperclip' package.\n"
+            "Install it with: pip install pyperclip"
+        ) from exc
+
+    text = pyperclip.paste()
+    if not text:
+        raise ValueError("Clipboard is empty.")
+
+    buffer = io.StringIO(text)
+    return DataFrame.read_csv(buffer, sep=sep, **kwargs)
 
 
 def read_fwf(filepath_or_buffer: Any, **kwargs: Any) -> DataFrame:
@@ -540,35 +661,45 @@ def read_html(
     >>> dfs = ppd.read_html("page.html")
     """
     try:
-        import pandas as pd
+        from bs4 import BeautifulSoup
+    except ImportError as exc:  # pragma: no cover - dependency optional
+        raise NotImplementedError(
+            "read_html() requires 'beautifulsoup4' and an HTML parser such as 'lxml' or 'html5lib'.\n"
+            "Install with: pip install beautifulsoup4 lxml html5lib"
+        ) from exc
 
-        # Use pandas to read HTML, then convert
-        pd_dfs = pd.read_html(
-            io=io,
-            match=match,
-            flavor=flavor,
+    if flavor is not None and flavor not in {"lxml", "html5lib", "bs4"}:
+        raise NotImplementedError(f"Unsupported flavor '{flavor}'. Supported: lxml, html5lib, bs4.")
+
+    html_text = _read_text_source(io)
+    parser = flavor or "lxml"
+    soup = BeautifulSoup(html_text, parser)
+
+    search_attrs = attrs or {}
+    tables = soup.find_all("table", attrs=search_attrs)
+
+    pattern = re.compile(match)
+    matched_tables = [
+        table
+        for table in tables
+        if pattern.search(table.get_text(" ", strip=True)) is not None
+    ]
+
+    if not matched_tables:
+        return []
+
+    results: List[DataFrame] = []
+    for table in matched_tables:
+        rows = _extract_table_rows(table)
+        frame = _rows_to_frame(
+            rows,
             header=header,
             index_col=index_col,
             skiprows=skiprows,
-            attrs=attrs,
-            parse_dates=parse_dates,
-            thousands=thousands,
-            encoding=encoding,
-            decimal=decimal,
-            converters=converters,
-            na_values=na_values,
-            keep_default_na=keep_default_na,
-            displayed_only=displayed_only,
-            **kwargs,
         )
-        return [DataFrame(pd_df) for pd_df in pd_dfs]
-    except ImportError:
-        raise NotImplementedError(
-            "read_html() requires pandas and lxml/html5lib.\n"
-            "Workarounds:\n"
-            "  - Install: pip install pandas lxml html5lib\n"
-            "  - Use pandas: pd.read_html(io) then convert with polarpandas.DataFrame(df)"
-        ) from None
+        results.append(frame)
+
+    return results
 
 
 def read_iceberg(path: str, **kwargs: Any) -> DataFrame:
@@ -665,23 +796,21 @@ def read_pickle(
         with open(filepath_or_buffer, "rb") as f:
             obj = pickle.load(f, **kwargs)
 
-    # Convert DataFrame if it's a pandas DataFrame
-    if hasattr(obj, "to_pandas"):
-        # Already a polarpandas DataFrame
+    # Convert DataFrame if it looks like a pandas object
+    module_name = getattr(obj, "__class__", type(obj)).__module__
+    class_name = getattr(obj, "__class__", type(obj)).__name__
+
+    if module_name.startswith("polarpandas"):
         return obj
-    elif hasattr(obj, "values"):
-        # Likely a pandas DataFrame
-        try:
-            import pandas as pd
 
-            if isinstance(obj, pd.DataFrame):
-                return DataFrame(obj)
-            elif isinstance(obj, pd.Series):
-                from .series import Series
+    if module_name.startswith("pandas"):
+        if class_name == "DataFrame":
+            data = obj.to_dict(orient="list")  # type: ignore[attr-defined]
+            return DataFrame(data)
+        if class_name == "Series":
+            from .series import Series
 
-                return Series(obj)
-        except ImportError:
-            pass
+            return Series(obj.tolist(), name=getattr(obj, "name", None))  # type: ignore[attr-defined]
 
     return obj
 
@@ -725,29 +854,51 @@ def read_sas(
     >>> import polarpandas as ppd
     >>> df = ppd.read_sas("data.sas7bdat")
     """
-    try:
-        import pandas as pd
+    if iterator or chunksize is not None:
+        raise NotImplementedError("Chunked SAS reading is not supported without pandas.")
+    if kwargs:
+        unsupported = ", ".join(sorted(kwargs.keys()))
+        raise NotImplementedError(f"Unsupported keyword arguments for read_sas(): {unsupported}")
 
-        # Use pandas to read SAS, then convert
-        pd_df = pd.read_sas(
-            filepath_or_buffer=filepath_or_buffer,
-            format=format,
-            index=index,
-            encoding=encoding,
-            chunksize=chunksize,
-            iterator=iterator,
-            **kwargs,
-        )
-        if iterator:
-            return (DataFrame(chunk) for chunk in pd_df)
-        return DataFrame(pd_df)
-    except ImportError:
+    try:
+        import pyreadstat
+    except ImportError as exc:  # pragma: no cover - dependency optional
         raise NotImplementedError(
-            "read_sas() requires pandas and sas7bdat.\n"
-            "Workarounds:\n"
-            "  - Install: pip install pandas sas7bdat\n"
-            "  - Use pandas: pd.read_sas(path) then convert with polarpandas.DataFrame(df)"
-        ) from None
+            "read_sas() requires the 'pyreadstat' package.\n"
+            "Install with: pip install pyreadstat"
+        ) from exc
+
+    chosen_format = (format or "").lower()
+    if not chosen_format:
+        path_str = str(filepath_or_buffer)
+        if path_str.lower().endswith(".sas7bdat"):
+            chosen_format = "sas7bdat"
+        elif path_str.lower().endswith((".xpt", ".xport")):
+            chosen_format = "xport"
+        else:
+            chosen_format = "sas7bdat"
+
+    if chosen_format not in {"sas7bdat", "xport", "xpt"}:
+        raise ValueError(f"Unsupported SAS format '{chosen_format}'.")
+
+    if chosen_format == "sas7bdat":
+        df, _ = pyreadstat.read_sas7bdat(filepath_or_buffer, encoding=encoding)
+    else:
+        df, _ = pyreadstat.read_xport(filepath_or_buffer, encoding=encoding)
+
+    index_values: Optional[List[Any]] = None
+    if index is not None:
+        if index not in df.columns:
+            raise ValueError(f"Index column '{index}' not found in SAS dataset.")
+        index_values = df[index].tolist()
+        df = df.drop(columns=[index])
+
+    data = df.to_dict(orient="list")
+    result = DataFrame(data)
+    if index_values is not None:
+        result._index = index_values
+        result._index_name = index
+    return result
 
 
 def read_spss(
@@ -780,24 +931,25 @@ def read_spss(
     >>> import polarpandas as ppd
     >>> df = ppd.read_spss("data.sav")
     """
-    try:
-        import pandas as pd
+    if kwargs:
+        unsupported = ", ".join(sorted(kwargs.keys()))
+        raise NotImplementedError(f"Unsupported keyword arguments for read_spss(): {unsupported}")
 
-        # Use pandas to read SPSS, then convert
-        pd_df = pd.read_spss(
-            filepath_or_buffer=filepath_or_buffer,
-            usecols=usecols,
-            convert_categoricals=convert_categoricals,
-            **kwargs,
-        )
-        return DataFrame(pd_df)
-    except ImportError:
+    try:
+        import pyreadstat
+    except ImportError as exc:  # pragma: no cover - dependency optional
         raise NotImplementedError(
-            "read_spss() requires pandas and pyreadstat.\n"
-            "Workarounds:\n"
-            "  - Install: pip install pandas pyreadstat\n"
-            "  - Use pandas: pd.read_spss(path) then convert with polarpandas.DataFrame(df)"
-        ) from None
+            "read_spss() requires the 'pyreadstat' package.\n"
+            "Install with: pip install pyreadstat"
+        ) from exc
+
+    df, _ = pyreadstat.read_sav(
+        filepath_or_buffer,
+        usecols=usecols,
+        apply_value_formats=convert_categoricals,
+    )
+    data = df.to_dict(orient="list")
+    return DataFrame(data)
 
 
 def read_sql_query(
@@ -972,33 +1124,41 @@ def read_stata(
     >>> import polarpandas as ppd
     >>> df = ppd.read_stata("data.dta")
     """
-    try:
-        import pandas as pd
+    if iterator or chunksize is not None:
+        raise NotImplementedError("Chunked Stata reading is not supported without pandas.")
+    if kwargs:
+        unsupported = ", ".join(sorted(kwargs.keys()))
+        raise NotImplementedError(f"Unsupported keyword arguments for read_stata(): {unsupported}")
 
-        # Use pandas to read Stata, then convert
-        pd_df = pd.read_stata(
-            filepath_or_buffer=filepath_or_buffer,
-            convert_dates=convert_dates,
-            convert_categoricals=convert_categoricals,
-            index_col=index_col,
-            convert_missing=convert_missing,
-            preserve_dtypes=preserve_dtypes,
-            columns=columns,
-            order_categoricals=order_categoricals,
-            chunksize=chunksize,
-            iterator=iterator,
-            **kwargs,
-        )
-        if iterator:
-            return (DataFrame(chunk) for chunk in pd_df)
-        return DataFrame(pd_df)
-    except ImportError:
+    try:
+        import pyreadstat
+    except ImportError as exc:  # pragma: no cover - dependency optional
         raise NotImplementedError(
-            "read_stata() requires pandas.\n"
-            "Workarounds:\n"
-            "  - Install: pip install pandas\n"
-            "  - Use pandas: pd.read_stata(path) then convert with polarpandas.DataFrame(df)"
-        ) from None
+            "read_stata() requires the 'pyreadstat' package.\n"
+            "Install with: pip install pyreadstat"
+        ) from exc
+
+    df, _ = pyreadstat.read_dta(
+        filepath_or_buffer,
+        convert_dates=convert_dates,
+        apply_value_formats=convert_categoricals,
+        columns=columns,
+    )
+
+    if index_col is not None:
+        if index_col not in df.columns:
+            raise ValueError(f"Index column '{index_col}' not found in Stata dataset.")
+        index_values = df[index_col].tolist()
+        df = df.drop(columns=[index_col])
+    else:
+        index_values = None
+
+    data = df.to_dict(orient="list")
+    result = DataFrame(data)
+    if index_values is not None:
+        result._index = index_values
+        result._index_name = index_col
+    return result
 
 
 def read_xml(
@@ -1067,36 +1227,51 @@ def read_xml(
     >>> import polarpandas as ppd
     >>> df = ppd.read_xml("data.xml")
     """
-    try:
-        import pandas as pd
+    if kwargs:
+        unsupported = ", ".join(sorted(kwargs.keys()))
+        raise NotImplementedError(f"Unsupported keyword arguments for read_xml(): {unsupported}")
+    if parser not in {None, "lxml"}:
+        raise NotImplementedError("Only the 'lxml' parser is supported.")
+    if stylesheet is not None or iterparse is not None or compression is not None or storage_options is not None:
+        raise NotImplementedError("Stylesheets, iterparse, compression, and storage options are not supported.")
 
-        # Use pandas to read XML, then convert
-        pd_df = pd.read_xml(
-            path_or_buffer=path_or_buffer,
-            xpath=xpath,
-            namespaces=namespaces,
-            elems_only=elems_only,
-            attrs_only=attrs_only,
-            names=names,
-            dtype=dtype,
-            converters=converters,
-            parse_dates=parse_dates,
-            encoding=encoding,
-            parser=parser,
-            stylesheet=stylesheet,
-            iterparse=iterparse,
-            compression=compression,
-            storage_options=storage_options,
-            **kwargs,
-        )
-        return DataFrame(pd_df)
-    except ImportError:
+    try:
+        from lxml import etree
+    except ImportError as exc:  # pragma: no cover - dependency optional
         raise NotImplementedError(
-            "read_xml() requires pandas and lxml.\n"
-            "Workarounds:\n"
-            "  - Install: pip install pandas lxml\n"
-            "  - Use pandas: pd.read_xml(path) then convert with polarpandas.DataFrame(df)"
-        ) from None
+            "read_xml() requires the 'lxml' package.\n"
+            "Install with: pip install lxml"
+        ) from exc
+
+    text = _read_text_source(path_or_buffer)
+    root = etree.fromstring(text.encode(encoding or "utf-8"))
+    nodes = root.xpath(xpath, namespaces=namespaces)
+
+    rows: List[Dict[str, Any]] = []
+    for node in nodes:
+        row: Dict[str, Any] = {}
+        if not attrs_only:
+            for child in node.iterchildren():
+                if len(child):
+                    # Nested element; store as stringified XML
+                    row[child.tag] = etree.tostring(child, encoding="unicode")
+                else:
+                    row[child.tag] = child.text
+        if not elems_only:
+            for attr_key, attr_val in node.attrib.items():
+                row[f"@{attr_key}"] = attr_val
+        if row:
+            rows.append(row)
+
+    if not rows:
+        return DataFrame()
+
+    frame = DataFrame(rows)
+    if names:
+        selected = [name for name in names if name in frame.columns]
+        if selected:
+            frame = DataFrame({col: frame._df[col] for col in selected})  # type: ignore[attr-defined]
+    return frame
 
 
 def to_pickle(
